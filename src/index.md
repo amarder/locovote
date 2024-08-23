@@ -2,110 +2,204 @@
 toc: false
 ---
 
-<div class="hero">
-  <h1>Locovote</h1>
-  <h2>Welcome to your new project! Edit&nbsp;<code style="font-size: 90%;">src/index.md</code> to change this page.</h2>
-  <a href="https://observablehq.com/framework/getting-started">Get started<span style="display: inline-block; margin-left: 0.25rem;">↗︎</span></a>
-</div>
+# Locovote
 
-<div class="grid grid-cols-2" style="grid-auto-rows: 504px;">
-  <div class="card">${
-    resize((width) => Plot.plot({
-      title: "Your awesomeness over time 🚀",
-      subtitle: "Up and to the right!",
-      width,
-      y: {grid: true, label: "Awesomeness"},
-      marks: [
-        Plot.ruleY([0]),
-        Plot.lineY(aapl, {x: "Date", y: "Close", tip: true})
-      ]
-    }))
-  }</div>
-  <div class="card">${
-    resize((width) => Plot.plot({
-      title: "How big are penguins, anyway? 🐧",
-      width,
-      grid: true,
-      x: {label: "Body mass (g)"},
-      y: {label: "Flipper length (mm)"},
-      color: {legend: true},
-      marks: [
-        Plot.linearRegressionY(penguins, {x: "body_mass_g", y: "flipper_length_mm", stroke: "species"}),
-        Plot.dot(penguins, {x: "body_mass_g", y: "flipper_length_mm", stroke: "species", tip: true})
-      ]
-    }))
-  }</div>
-</div>
+*Vote with your feet!*
 
----
 
-## Next steps
 
-Here are some ideas of things you could try…
+```js
+// [d3-sankey](https://github.com/d3/d3-sankey) is not part of the D3 bundle
+// https://observablehq.com/framework/imports
+import * as d3Sankey from "npm:d3-sankey";
+```
 
-<div class="grid grid-cols-4">
-  <div class="card">
-    Chart your own data using <a href="https://observablehq.com/framework/lib/plot"><code>Plot</code></a> and <a href="https://observablehq.com/framework/files"><code>FileAttachment</code></a>. Make it responsive using <a href="https://observablehq.com/framework/javascript#resize(render)"><code>resize</code></a>.
-  </div>
-  <div class="card">
-    Create a <a href="https://observablehq.com/framework/project-structure">new page</a> by adding a Markdown file (<code>whatever.md</code>) to the <code>src</code> folder.
-  </div>
-  <div class="card">
-    Add a drop-down menu using <a href="https://observablehq.com/framework/inputs/select"><code>Inputs.select</code></a> and use it to filter the data shown in a chart.
-  </div>
-  <div class="card">
-    Write a <a href="https://observablehq.com/framework/loaders">data loader</a> that queries a local database or API, generating a data snapshot on build.
-  </div>
-  <div class="card">
-    Import a <a href="https://observablehq.com/framework/imports">recommended library</a> from npm, such as <a href="https://observablehq.com/framework/lib/leaflet">Leaflet</a>, <a href="https://observablehq.com/framework/lib/dot">GraphViz</a>, <a href="https://observablehq.com/framework/lib/tex">TeX</a>, or <a href="https://observablehq.com/framework/lib/duckdb">DuckDB</a>.
-  </div>
-  <div class="card">
-    Ask for help, or share your work or ideas, on the <a href="https://talk.observablehq.com/">Observable forum</a>.
-  </div>
-  <div class="card">
-    Visit <a href="https://github.com/observablehq/framework">Framework on GitHub</a> and give us a star. Or file an issue if you’ve found a bug!
-  </div>
-</div>
+```js
+// Copyright 2021-2023 Observable, Inc.
+// Released under the ISC license.
+// https://observablehq.com/@d3/sankey-diagram
+function SankeyChart({
+  nodes, // an iterable of node objects (typically [{id}, …]); implied by links if missing
+  links // an iterable of link objects (typically [{source, target}, …])
+}, {
+  format = ",", // a function or format specifier for values in titles
+  align = "justify", // convenience shorthand for nodeAlign
+  nodeId = d => d.id, // given d in nodes, returns a unique identifier (string)
+  nodeGroup, // given d in nodes, returns an (ordinal) value for color
+  nodeGroups, // an array of ordinal values representing the node groups
+  nodeLabel, // given d in (computed) nodes, text to label the associated rect
+  nodeTitle = d => `${d.id}\n${format(d.value)}`, // given d in (computed) nodes, hover text
+  nodeAlign = align, // Sankey node alignment strategy: left, right, justify, center
+  nodeSort, // comparator function to order nodes
+  nodeWidth = 15, // width of node rects
+  nodePadding = 10, // vertical separation between adjacent nodes
+  nodeLabelPadding = 6, // horizontal separation between node and label
+  nodeStroke = "currentColor", // stroke around node rects
+  nodeStrokeWidth, // width of stroke around node rects, in pixels
+  nodeStrokeOpacity, // opacity of stroke around node rects
+  nodeStrokeLinejoin, // line join for stroke around node rects
+  linkSource = ({source}) => source, // given d in links, returns a node identifier string
+  linkTarget = ({target}) => target, // given d in links, returns a node identifier string
+  linkValue = ({value}) => value, // given d in links, returns the quantitative value
+  linkPath = d3Sankey.sankeyLinkHorizontal(), // given d in (computed) links, returns the SVG path
+  linkTitle = d => `${d.source.id} → ${d.target.id}\n${format(d.value)}`, // given d in (computed) links
+  linkColor = "source-target", // source, target, source-target, or static color
+  linkStrokeOpacity = 0.5, // link stroke opacity
+  linkMixBlendMode = "multiply", // link blending mode
+  colors = d3.schemeTableau10, // array of colors
+  width = 640, // outer width, in pixels
+  height = 400, // outer height, in pixels
+  marginTop = 5, // top margin, in pixels
+  marginRight = 1, // right margin, in pixels
+  marginBottom = 5, // bottom margin, in pixels
+  marginLeft = 1, // left margin, in pixels
+} = {}) {
+  // Convert nodeAlign from a name to a function (since d3-sankey is not part of core d3).
+  if (typeof nodeAlign !== "function") nodeAlign = {
+    left: d3Sankey.sankeyLeft,
+    right: d3Sankey.sankeyRight,
+    center: d3Sankey.sankeyCenter
+  }[nodeAlign] ?? d3Sankey.sankeyJustify;
 
-<style>
+  // Compute values.
+  const LS = d3.map(links, linkSource).map(intern);
+  const LT = d3.map(links, linkTarget).map(intern);
+  const LV = d3.map(links, linkValue);
+  if (nodes === undefined) nodes = Array.from(d3.union(LS, LT), id => ({id}));
+  const N = d3.map(nodes, nodeId).map(intern);
+  const G = nodeGroup == null ? null : d3.map(nodes, nodeGroup).map(intern);
 
-.hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-family: var(--sans-serif);
-  margin: 4rem 0 8rem;
-  text-wrap: balance;
-  text-align: center;
-}
+  // Replace the input nodes and links with mutable objects for the simulation.
+  nodes = d3.map(nodes, (_, i) => ({id: N[i]}));
+  links = d3.map(links, (_, i) => ({source: LS[i], target: LT[i], value: LV[i]}));
 
-.hero h1 {
-  margin: 1rem 0;
-  padding: 1rem 0;
-  max-width: none;
-  font-size: 14vw;
-  font-weight: 900;
-  line-height: 1;
-  background: linear-gradient(30deg, var(--theme-foreground-focus), currentColor);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+  // Ignore a group-based linkColor option if no groups are specified.
+  if (!G && ["source", "target", "source-target"].includes(linkColor)) linkColor = "currentColor";
 
-.hero h2 {
-  margin: 0;
-  max-width: 34em;
-  font-size: 20px;
-  font-style: initial;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--theme-foreground-muted);
-}
+  // Compute default domains.
+  if (G && nodeGroups === undefined) nodeGroups = G;
 
-@media (min-width: 640px) {
-  .hero h1 {
-    font-size: 90px;
+  // Construct the scales.
+  const color = nodeGroup == null ? null : d3.scaleOrdinal(nodeGroups, colors);
+
+  // Compute the Sankey layout.
+  d3Sankey.sankey()
+      .nodeId(({index: i}) => N[i])
+      .nodeAlign(nodeAlign)
+      .nodeWidth(nodeWidth)
+      .nodePadding(nodePadding)
+      .nodeSort(nodeSort)
+      .extent([[marginLeft, marginTop], [width - marginRight, height - marginBottom]])
+    ({nodes, links});
+
+  // Compute titles and labels using layout nodes, so as to access aggregate values.
+  if (typeof format !== "function") format = d3.format(format);
+  const Tl = nodeLabel === undefined ? N : nodeLabel == null ? null : d3.map(nodes, nodeLabel);
+  const Tt = nodeTitle == null ? null : d3.map(nodes, nodeTitle);
+  const Lt = linkTitle == null ? null : d3.map(links, linkTitle);
+
+  // A unique identifier for clip paths (to avoid conflicts).
+  const uid = `O-${Math.random().toString(16).slice(2)}`;
+
+  const svg = d3.create("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("viewBox", [0, 0, width, height])
+      .attr("style", "max-width: 100%; height: auto; height: intrinsic;");
+
+svg.append("rect")
+    .attr("width", "100%")
+    .attr("height", "100%")
+    .attr("fill", "white");
+
+  const node = svg.append("g")
+      .attr("stroke", nodeStroke)
+      .attr("stroke-width", nodeStrokeWidth)
+      .attr("stroke-opacity", nodeStrokeOpacity)
+      .attr("stroke-linejoin", nodeStrokeLinejoin)
+    .selectAll("rect")
+    .data(nodes)
+    .join("rect")
+      .attr("x", d => d.x0)
+      .attr("y", d => d.y0)
+      .attr("height", d => d.y1 - d.y0)
+      .attr("width", d => d.x1 - d.x0);
+
+  if (G) node.attr("fill", ({index: i}) => color(G[i]));
+  if (Tt) node.append("title").text(({index: i}) => Tt[i]);
+
+  const link = svg.append("g")
+      .attr("fill", "none")
+      .attr("stroke-opacity", linkStrokeOpacity)
+    .selectAll("g")
+    .data(links)
+    .join("g")
+      .style("mix-blend-mode", linkMixBlendMode);
+
+  if (linkColor === "source-target") link.append("linearGradient")
+      .attr("id", d => `${uid}-link-${d.index}`)
+      .attr("gradientUnits", "userSpaceOnUse")
+      .attr("x1", d => d.source.x1)
+      .attr("x2", d => d.target.x0)
+      .call(gradient => gradient.append("stop")
+          .attr("offset", "0%")
+          .attr("stop-color", ({source: {index: i}}) => color(G[i])))
+      .call(gradient => gradient.append("stop")
+          .attr("offset", "100%")
+          .attr("stop-color", ({target: {index: i}}) => color(G[i])));
+
+  link.append("path")
+      .attr("d", linkPath)
+      .attr("stroke", linkColor === "source-target" ? ({index: i}) => `url(#${uid}-link-${i})`
+          : linkColor === "source" ? ({source: {index: i}}) => color(G[i])
+          : linkColor === "target" ? ({target: {index: i}}) => color(G[i])
+          : linkColor)
+      .attr("stroke-width", ({width}) => Math.max(1, width))
+      .call(Lt ? path => path.append("title").text(({index: i}) => Lt[i]) : () => {});
+
+  if (Tl) svg.append("g")
+      .attr("font-family", "sans-serif")
+      .attr("font-size", 10)
+    .selectAll("text")
+    .data(nodes)
+    .join("text")
+      .attr("x", d => d.x0 < width / 2 ? d.x1 + nodeLabelPadding : d.x0 - nodeLabelPadding)
+      .attr("y", d => (d.y1 + d.y0) / 2)
+      .attr("dy", "0.35em")
+      .attr("text-anchor", d => d.x0 < width / 2 ? "start" : "end")
+      .text(({index: i}) => Tl[i]);
+
+  function intern(value) {
+    return value !== null && typeof value === "object" ? value.valueOf() : value;
   }
-}
 
-</style>
+  return Object.assign(svg.node(), {scales: {color}});
+}
+```
+
+## About
+
+Welcome to Locovote, your ultimate resource for discovering Massachusetts towns that fit your lifestyle preferences. Our site simplifies the process of finding the perfect community by providing easy access to comprehensive town data. Whether you're seeking vibrant local amenities, excellent schools, or peaceful surroundings, Locovote helps you make informed decisions about where to live. By empowering you with clear, navigable information, we aim to support your journey to a town that truly matches your values and needs. Start exploring today and find the ideal Massachusetts town to call home with confidence!
+
+## Finances
+
+```js
+const energy = FileAttachment("./data/energy.csv").csv({typed: true})
+```
+
+```js
+const chart = SankeyChart({
+  links: energy
+}, {
+  nodeGroup: d => d.id.split(/\W/)[0], // take first word for color
+  nodeAlign: "justify", // e.g., d3.sankeyJustify; set by input above
+  linkColor: "#aaa", // e.g., "source" or "target"; set by input above
+  format: (f => d => `${f(d)} TWh`)(d3.format(",.1~f")),
+  width,
+  height: 600
+})
+```
+
+<div class="grid grid-cols-1">
+<div class="card">${chart}</div>
+</div>
