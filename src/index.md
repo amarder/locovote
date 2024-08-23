@@ -184,17 +184,34 @@ Welcome to Locovote, your ultimate resource for discovering Massachusetts towns 
 ## Finances
 
 ```js
-const energy = FileAttachment("./data/energy.csv").csv({typed: true})
+const flows = FileAttachment("./data/flows.csv").csv({typed: true})
 ```
 
 ```js
+// Step 1: Extract the "town" attribute from each object
+const towns = flows.map(obj => obj.town);
+
+// Step 2: Create a list of unique towns
+const uniqueTowns = [...new Set(towns)];
+
+// Step 3: Sort the list of towns in alphabetical order
+const sortedUniqueTowns = uniqueTowns.sort();
+const selected_town = view(Inputs.select(sortedUniqueTowns));
+```
+
+```js
+const selected_flows = flows.filter(obj => obj.town === selected_town);
+```
+
+```js
+const sorted_flows = selected_flows.sort((a, b) => a.target.localeCompare(b.target));
 const chart = SankeyChart({
-  links: energy
+  links: sorted_flows
 }, {
   nodeGroup: d => d.id.split(/\W/)[0], // take first word for color
   nodeAlign: "justify", // e.g., d3.sankeyJustify; set by input above
   linkColor: "#aaa", // e.g., "source" or "target"; set by input above
-  format: (f => d => `${f(d)} TWh`)(d3.format(",.1~f")),
+  format: (f => d => `${f(d)}`)(d3.format("$,.0~f")),
   width,
   height: 600
 })
