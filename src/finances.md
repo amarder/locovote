@@ -21,20 +21,20 @@ const selected_flows = flows.filter(obj => obj.town === selected_town);
 import {SankeyChart} from "./components/sankey.js";
 
 const sorted_flows = selected_flows.sort((a, b) => a.target.localeCompare(b.target));
-const chart = SankeyChart({
-  links: sorted_flows
-}, {
-  nodeGroup: d => d.id.split(/\W/)[0], // take first word for color
-  nodeAlign: "justify", // e.g., d3.sankeyJustify; set by input above
-  linkColor: "#aaa", // e.g., "source" or "target"; set by input above
-  format: (f => d => `${f(d)}`)(d3.format("$,.0~f")),
-  width,
-  height: 600
-})
 ```
 
 <div class="grid grid-cols-1">
-<div class="card">${chart}</div>
+<div class="card">${resize((width) => SankeyChart({
+  links: sorted_flows
+}, {
+  nodeGroup: d => d.id, // color group
+  nodeAlign: "justify", // e.g., d3.sankeyJustify; set by input above
+  linkColor: "#aaa", // e.g., "source" or "target"; set by input above
+  format: (f => d => `${f(d)}`)(d3.format("$,.0~f")),
+  width: width,
+  height: 600
+})
+)}</div>
 </div>
 
 This visualization has a few objectives:

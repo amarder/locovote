@@ -17,5 +17,4 @@ What do I want to focus on next? *The sankey plot*:
 
 5. Set up map: https://observablehq.com/framework/lib/topojson
 6. Optimize for mobile - not sure what resolution to go with.
-8. Do I need to use resize for responsive ness?
 10. https://talk.observablehq.com/
