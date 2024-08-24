@@ -10,7 +10,7 @@ const flows = FileAttachment("./data/flows.csv").csv({typed: true})
 const towns = flows.map(obj => obj.town);
 const uniqueTowns = [...new Set(towns)];
 const sortedUniqueTowns = uniqueTowns.sort();
-const selected_town = view(Inputs.select(sortedUniqueTowns, {label: "Municipality: "}));
+const selected_town = view(Inputs.select(sortedUniqueTowns, {label: "Municipality: ", value: "Boston"}));
 ```
 
 ```js

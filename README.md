@@ -1,8 +1,14 @@
 # Locovote
 
-1. Sort the sankey plot better.
+What do I want to focus on next? *The sankey plot*:
+
+3. Get it to the point that I can share it with DOR.
+    1. Sort the sankey plot better.
+    3. Make it look good on mobile. (Show totals rather than hover over)
 2. Toggle totals vs per capita
-3. Show totals rather than hover over
+
+---
+
 4. Put parameters in URL
 5. Set up footnotes
 
