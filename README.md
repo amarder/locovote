@@ -1,10 +1,8 @@
 # Locovote
 
-What do I want to focus on next? *The sankey plot*:
-
-3. Get it to the point that I can share it with DOR.
-    3. Make it look good on mobile. (Show totals rather than hover over)
+3. Make it look good on mobile. (Show totals rather than hover over)
 2. Toggle totals vs per capita
+3. Consider sharing the same range for both charts
 
 ---
 
