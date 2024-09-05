@@ -4,6 +4,9 @@
 2. Toggle totals vs per capita
 3. Consider sharing the same range for both charts
 
+
+It would be nice to see spending per student.
+
 ---
 
 4. Put parameters in URL

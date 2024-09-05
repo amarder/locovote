@@ -14,6 +14,10 @@ const selected_town = view(Inputs.select(sortedUniqueTowns, {label: "Municipalit
 ```
 
 ```js
+const scale = view(Inputs.select(["Total", "Percent", "Per Capita"], {label: "Scale: "}));
+```
+
+```js
 const selected_municipality = municipalities.filter(obj => obj.Municipality === selected_town)[0];
 ```
 
@@ -26,6 +30,31 @@ const spending_data = spending_cols.map(key => ({key: key, value: selected_munic
 const rev_data = [...levy_cols, ...revenue_cols].map(key => ({key: key, value: selected_municipality[key]}))
 
 function my_hist(title, data) {
+  const sum = data.reduce((sum, x) => sum + x.value, 0);
+  if (scale == "Percent") {
+    data = data.map(obj => ({
+      ...obj,
+      value: 100 * obj.value / sum
+    }));
+  }
+  const pop = selected_municipality["2021 Population"];
+  if (scale == "Per Capita") {
+    data = data.map(obj => ({
+      ...obj,
+      value: obj.value / pop
+    }));
+  }
+  const xaxes = {
+    "Total": {
+    transform: (d) => d / 1e6,
+    label: "Amount (millions)"
+  },
+    "Percent": {label: "Share of Total (%)"},
+    "Per Capita": {
+      label: "Amount ($/person)"
+    }
+  }
+
   return Plot.plot({
   title: title,
   grid: true,
@@ -37,10 +66,7 @@ function my_hist(title, data) {
       tip: "y"
     }),
   ],
-  x: {
-    transform: (d) => d / 1e6,
-    label: "Amount (millions)"
-  },
+  x: xaxes[scale],
   y: {
     label: ""
 },
@@ -56,6 +82,6 @@ function my_hist(title, data) {
 
 This visualization has a few objectives:
 
-- Where is the municipality spending money?
-- Where does the municipality (city or town) get its revenue?
-- How big are these dollar amounts (totals and per resident)? percentages
+- What does the municipality (city or town) spend money on?
+- Where does the municipality get its money from?
+- How big are these numbers (totals, percentages, and per resident)?
