@@ -1,9 +1,6 @@
 # Locovote
 
-3. Make it look good on mobile. (Show totals rather than hover over)
-2. Toggle totals vs per capita
-3. Consider sharing the same range for both charts
-
+1. Get MCAS data up and running
 
 It would be nice to see spending per student.
 
