@@ -19,9 +19,12 @@ const search = view(Inputs.search(schools));
 Select schools in the table below to view their standardized test results:
 
 ```js
+// debugger;
+
 const selection = view(Inputs.table(search, {
     required: false,
-    multiple: true
+    multiple: true,
+    value: search.slice(0, 1)
 }));
 ```
 
@@ -59,10 +62,9 @@ display(my_plot);
 }
 ```
 
-## TODO
+**TODO**
 
 - Incorporate the latest data
-- If no schools are selected hide the last plot
 - Make table of schools more informative
 - Improve labels (ELA = English Language Arts, years generally don't have commas)
 - Make it easier to compare schools in different towns (modify how search works)
