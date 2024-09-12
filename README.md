@@ -1,10 +1,12 @@
 # Locovote
 
-1. Get MCAS data up and running
+For MCAS data:
 
-It would be nice to see spending per student.
+3. Incorporate latest data
 
 ---
+
+It would be nice to see spending per student.
 
 4. Put parameters in URL
 5. Set up footnotes
