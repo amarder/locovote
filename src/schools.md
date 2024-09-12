@@ -3,11 +3,11 @@ title: Schools
 ---
 
 ```js
-const db = await DuckDBClient.of({base: FileAttachment("./data/mcas.db")});
+const db = DuckDBClient.of({base: FileAttachment("./data/mcas.db")});
 ```
 
 ```js
-const schools = await db.query("SELECT DISTINCT district, school, school_code FROM base.mcas ORDER BY district, school");
+const schools = db.query("SELECT DISTINCT district, school, school_code FROM base.mcas ORDER BY district, school");
 ```
 
 Search for the schools you're interested in:
