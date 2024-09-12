@@ -1,11 +1,5 @@
 # Locovote
 
-For MCAS data:
-
-3. Incorporate latest data
-
----
-
 It would be nice to see spending per student.
 
 4. Put parameters in URL

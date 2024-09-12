@@ -7,46 +7,38 @@ const db = await DuckDBClient.of({base: FileAttachment("./data/mcas.db")});
 ```
 
 ```js
-const districts = await db.query("SELECT DISTINCT district FROM base.mcas ORDER BY district");
+const schools = await db.query("SELECT DISTINCT district, school, school_code FROM base.mcas ORDER BY district, school");
 ```
 
+Search for the schools you're interested in:
+
 ```js
-const first_district = districts.get(1);
+const search = view(Inputs.search(schools));
 ```
 
-Select a district to view MCAS results:
+Select schools in the table below to view their standardized test results:
 
 ```js
-const selection = view(Inputs.table(districts, {
-    required: true,
-    multiple: false
+const selection = view(Inputs.table(search, {
+    required: false,
+    multiple: true
 }));
 ```
 
 ```js
-const ss = {district: "Boston"};
-if (selection === null) {
-    console.log("skip");
-}
-else {
-    ss.district = selection.district;
-}
-// debugger;
-```
+if (selection.length > 0) {
 
-```js
-const data = db.sql`SELECT *, 100 * (n_e / n) AS p_e FROM base.mcas WHERE district = ${ss.district}`
-```
+// Below is a plot of the data for the selected schools.
 
-Below is a plot of the data for this district.
-
-```js
-Plot.plot({
-  title: ss.district,
+const my_list = selection.map((x) => `'${x.school_code}'`).join(", ");
+const data = await db.query(`SELECT *, 100 * (n_e / n) AS p_e FROM base.mcas WHERE school_code IN (${my_list})`);
+const my_plot = Plot.plot({
+  title: "Percentage of students exceeding expectations by school, grade, subject, and year",
   y: {domain: [0, 100], label: "Exceeding expectations (%)"},
   x: {domain: [3, 10], label: "Grade"},
   facet: {data: data, y: "year", x: "Subject"},
   inset: 10,
+  color: {legend: true},
   marks: [
     Plot.frame(),
     Plot.line(data, {
@@ -62,5 +54,15 @@ Plot.plot({
       tip: true
     })
   ]
-})
+});
+display(my_plot);
+}
 ```
+
+## TODO
+
+- Incorporate the latest data
+- If no schools are selected hide the last plot
+- Make table of schools more informative
+- Improve labels (ELA = English Language Arts, years generally don't have commas)
+- Make it easier to compare schools in different towns (modify how search works)
