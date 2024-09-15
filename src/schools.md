@@ -3,11 +3,11 @@ title: Schools
 ---
 
 ```js
-const db = DuckDBClient.of({base: FileAttachment("./data/mcas.db")});
+const db = DuckDBClient.of({mcas: FileAttachment("./data/mcas.parquet")});
 ```
 
 ```js
-const schools = db.query("SELECT DISTINCT district, school, school_code FROM base.mcas ORDER BY district, school");
+const schools = db.query("SELECT DISTINCT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code FROM mcas ORDER BY district, school");
 ```
 
 Search for the schools you're interested in:
@@ -34,12 +34,12 @@ if (selection.length > 0) {
 // Below is a plot of the data for the selected schools.
 
 const my_list = selection.map((x) => `'${x.school_code}'`).join(", ");
-const data = await db.query(`SELECT *, 100 * (n_e / n) AS p_e FROM base.mcas WHERE school_code IN (${my_list})`);
+const data = await db.query(`SELECT *, 100 * (n_e / n) AS p_e FROM mcas WHERE ORG_CODE IN (${my_list})`);
 const my_plot = Plot.plot({
   title: "Percentage of students exceeding expectations by school, grade, subject, and year",
   y: {domain: [0, 100], label: "Exceeding expectations (%)"},
   x: {domain: [3, 10], label: "Grade"},
-  facet: {data: data, y: "year", x: "Subject"},
+  facet: {data: data, y: "year", x: "SUBJECT_CODE"},
   inset: 10,
   color: {legend: true},
   marks: [
@@ -47,13 +47,13 @@ const my_plot = Plot.plot({
     Plot.line(data, {
         x: "grade",
         y: "p_e",
-        stroke: "school",
-        z: "school",
+        stroke: "ORG_NAME",
+        z: "ORG_NAME",
     }),
     Plot.dot(data, {
       x: "grade",
       y: "p_e",
-      fill: "school",
+      fill: "ORG_NAME",
       tip: true
     })
   ]
@@ -64,7 +64,9 @@ display(my_plot);
 
 **TODO**
 
-- Incorporate the latest data
 - Make table of schools more informative
 - Improve labels (ELA = English Language Arts, years generally don't have commas)
 - Make it easier to compare schools in different towns (modify how search works)
+- Speed up page load / reduce bandwidth
+
+cite data source: https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data
