@@ -2,6 +2,8 @@
 title: Schools
 ---
 
+# Schools
+
 ```js
 const db = DuckDBClient.of({mcas: FileAttachment("./data/mcas.parquet")});
 ```
@@ -62,11 +64,10 @@ display(my_plot);
 }
 ```
 
-**TODO**
+Planned improvements:
 
 - Make table of schools more informative
 - Improve labels (ELA = English Language Arts, years generally don't have commas)
-- Make it easier to compare schools in different towns (modify how search works)
-- Speed up page load / reduce bandwidth
+- Speed up page load
 
-cite data source: https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data
+Data comes from the [Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data).
