@@ -68,6 +68,5 @@ Planned improvements:
 
 - Make table of schools more informative
 - Improve labels (ELA = English Language Arts, years generally don't have commas)
-- Speed up page load
 
 Data comes from the [Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data).

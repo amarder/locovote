@@ -1,3 +1,28 @@
+function pad(number: number, length: number): string {
+  return String(number).padStart(length, "0");
+}
+
+function formatIsoDate(date: Date): string {
+  return `${[pad(date.getFullYear(), 4), pad(date.getMonth() + 1, 2), pad(date.getDate(), 2)].join("-")}T${[
+    pad(date.getHours(), 2),
+    pad(date.getMinutes(), 2),
+    pad(date.getSeconds(), 2)
+  ].join(":")}`;
+}
+
+function formatLocaleDate(date: Date, locale: Intl.LocalesArgument = "en-US"): string {
+  return date.toLocaleDateString(locale, {month: "short", day: "numeric", year: "numeric"});
+}
+
+let currentDate: Date | null = null;
+
+function defaultFooter(): string {
+  const date = currentDate ?? new Date();
+  return `Source code on <a href="https://github.com/amarder/locovote" target="_blank">GitHub</a>. Built on <a title="${formatIsoDate(
+    date
+  )}">${formatLocaleDate(date)}</a> with <a href="https://observablehq.com/framework/" target="_blank">Observable Framework</a>. Hosted by <a href="https://www.netlify.com/" target="_blank">Netlify</a>.`;
+}
+
 // See https://observablehq.com/framework/config for documentation.
 export default {
   // The project’s title; used in the sidebar and webpage titles.
@@ -18,6 +43,7 @@ export default {
 
   // Content to add to the head of the page, e.g. for a favicon:
   head: '<link rel="icon" href="observable.png" type="image/png" sizes="32x32">',
+  footer: defaultFooter(),
 
   // The path to the source root.
   root: "src",
