@@ -14,13 +14,11 @@ const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_
 
 ```
 
-Search for the schools you're interested in:
-
 ```js
 const search = view(Inputs.search(schools));
 ```
 
-Select schools and/or school districts in the table below to view their standardized test results:
+Select schools and/or districts in the table below to view their standardized test results.
 
 ```js
 // debugger;
@@ -34,6 +32,8 @@ const selection = view(Inputs.table(search, {
     format: {pct_e: (x) => x.toFixed(1), pct_me: (x) => x.toFixed(1), is_district: (x) => x ? "District" : "School"}
 }));
 ```
+
+&nbsp;
 
 ```js
 if (selection.length > 0) {
@@ -68,10 +68,5 @@ const my_plot = Plot.plot({
 display(my_plot);
 }
 ```
-
-Planned improvements:
-
-- Make table of schools more informative
-- Improve labels (ELA = English Language Arts, years generally don't have commas)
 
 Data comes from the [Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data).
