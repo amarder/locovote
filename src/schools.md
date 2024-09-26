@@ -9,7 +9,9 @@ const db = DuckDBClient.of({mcas: FileAttachment("./data/mcas.parquet")});
 ```
 
 ```js
-const schools = db.query("SELECT DISTINCT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code FROM mcas ORDER BY district, school");
+// const schools = db.query("SELECT DISTINCT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code FROM mcas ORDER BY district, school");
+const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code, ends_with(school_code, '0000') AS is_district, 100*SUM(n_e)/SUM(n) AS pct_e, 100*SUM(n_me)/SUM(n) AS pct_me FROM mcas GROUP BY DIST_NAME, ORG_NAME, ORG_CODE ORDER BY district, school");
+
 ```
 
 Search for the schools you're interested in:
@@ -18,7 +20,7 @@ Search for the schools you're interested in:
 const search = view(Inputs.search(schools));
 ```
 
-Select schools in the table below to view their standardized test results:
+Select schools and/or school districts in the table below to view their standardized test results:
 
 ```js
 // debugger;
@@ -26,7 +28,10 @@ Select schools in the table below to view their standardized test results:
 const selection = view(Inputs.table(search, {
     required: false,
     multiple: true,
-    value: search.slice(0, 1)
+    value: search.slice(0, 1),
+    columns: ["district", "school", "pct_e", "pct_me", "is_district"],
+    header: {"district": "District", "school": "Name", "pct_e": "Exceeding (%)", "pct_me": "Meeting or Exceeding (%)", "is_district": "Type"},
+    format: {pct_e: (x) => x.toFixed(1), pct_me: (x) => x.toFixed(1), is_district: (x) => x ? "District" : "School"}
 }));
 ```
 
