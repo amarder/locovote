@@ -37,31 +37,46 @@ const selection = view(my_table);
 
 <div class="card">${my_table}</div>
 
-&nbsp;
+```js
+const y_labels = {n_e: "Exceeding Expectations (%)", n_me: "Meeting or Exceeding Expectations (%)"};
+const y = view(Inputs.select(["n_e", "n_me"], {label: "Y-Axis", format: (x) => y_labels[x]}));
+
+const x_labels = {year: "Year", grade: "Grade", SUBJECT_CODE: "Subject"};
+const x = view(Inputs.select(["year", "grade"], {label: "X-Axis", format: (x) => x_labels[x]}));
+```
+
+```js
+const all_facets = ["year", "grade", "SUBJECT_CODE"];
+const available_facets = all_facets.filter(facet => facet !== x);
+const facets = view(Inputs.select(available_facets, {label: "Facets", format: (x) => x_labels[x], multiple: true}));
+```
 
 ```js
 async function make_plot() {
 if (selection.length > 0) {
 const my_list = selection.map((x) => `'${x.school_code}'`).join(", ");
-const data = await db.query(`SELECT *, 100 * (n_e / n) AS p_e FROM mcas WHERE ORG_CODE IN (${my_list})`);
+const groups = [x, ...facets, "ORG_CODE", "ORG_NAME"];
+const group_list = groups.join(", ");
+const my_query = `SELECT ${group_list}, 100*SUM(${y})/SUM(n) AS y FROM mcas WHERE ORG_CODE IN (${my_list}) GROUP BY ${group_list}`;
+const data = await db.query(my_query);
 const my_plot = Plot.plot({
-  title: "Percentage of students exceeding expectations by school, grade, subject, and year",
-  y: {domain: [0, 100], label: "Exceeding expectations (%)"},
-  x: {domain: [3, 10], label: "Grade"},
-  facet: {data: data, y: "year", x: "SUBJECT_CODE"},
+  title: "Student performance by school, grade, subject, and year",
+  y: {domain: [0, 100], label: y_labels[y]},
+  x: {label: x_labels[x]},
+  facet: {data: data, y: facets[0], x: facets[1]},
   inset: 10,
   color: {legend: true},
   marks: [
     Plot.frame(),
     Plot.line(data, {
-        x: "grade",
-        y: "p_e",
+        x: x,
+        y: "y",
         stroke: "ORG_NAME",
         z: "ORG_NAME",
     }),
     Plot.dot(data, {
-      x: "grade",
-      y: "p_e",
+      x: x,
+      y: "y",
       fill: "ORG_NAME",
       tip: true
     })

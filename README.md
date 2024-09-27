@@ -6,6 +6,8 @@ Observable Framework has support for [data loaders](https://observablehq.com/fra
 
 ## Tasks
 
+- labels on facets aren't great, but that seems not critical
+
 - It would be nice to see spending per student.
 - Better search https://observablehq.com/@john-guerra/multi-auto-select
 - Table is nice with sparklines: https://observablehq.com/framework/inputs/table
