@@ -14,32 +14,34 @@ const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_
 
 ```
 
+Select schools or districts in the table below to view their standardized test results.
+
 ```js
 const search = view(Inputs.search(schools));
 ```
 
-Select schools and/or districts in the table below to view their standardized test results.
-
 ```js
 // debugger;
 
-const selection = view(Inputs.table(search, {
+const my_table = Inputs.table(search, {
     required: false,
     multiple: true,
     value: search.slice(0, 1),
     columns: ["district", "school", "pct_e", "pct_me", "is_district"],
     header: {"district": "District", "school": "Name", "pct_e": "Exceeding (%)", "pct_me": "Meeting or Exceeding (%)", "is_district": "Type"},
     format: {pct_e: (x) => x.toFixed(1), pct_me: (x) => x.toFixed(1), is_district: (x) => x ? "District" : "School"}
-}));
+});
+
+const selection = view(my_table);
 ```
+
+<div class="card">${my_table}</div>
 
 &nbsp;
 
 ```js
+async function make_plot() {
 if (selection.length > 0) {
-
-// Below is a plot of the data for the selected schools.
-
 const my_list = selection.map((x) => `'${x.school_code}'`).join(", ");
 const data = await db.query(`SELECT *, 100 * (n_e / n) AS p_e FROM mcas WHERE ORG_CODE IN (${my_list})`);
 const my_plot = Plot.plot({
@@ -65,8 +67,12 @@ const my_plot = Plot.plot({
     })
   ]
 });
-display(my_plot);
+return my_plot;
+}
+return "Select a row in the table above to see the corresponding data.";
 }
 ```
+
+<div class="card">${make_plot()}</div>
 
 Data comes from the [Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data).

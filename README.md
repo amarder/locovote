@@ -10,5 +10,4 @@ Observable Framework has support for [data loaders](https://observablehq.com/fra
 - Better search https://observablehq.com/@john-guerra/multi-auto-select
 - Table is nice with sparklines: https://observablehq.com/framework/inputs/table
 - Set up map: https://observablehq.com/framework/lib/topojson
-- Why is the schools load not spinning?
 - Schools: Improve labels (ELA = English Language Arts, years generally don't have commas)
