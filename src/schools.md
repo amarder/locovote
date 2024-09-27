@@ -40,7 +40,9 @@ const selection = view(my_table);
 ```js
 const y_labels = {n_e: "Exceeding Expectations (%)", n_me: "Meeting or Exceeding Expectations (%)"};
 const y = view(Inputs.select(["n_e", "n_me"], {label: "Y-Axis", format: (x) => y_labels[x]}));
+```
 
+```js
 const x_labels = {year: "Year", grade: "Grade", SUBJECT_CODE: "Subject"};
 const x = view(Inputs.select(["year", "grade"], {label: "X-Axis", format: (x) => x_labels[x]}));
 ```
