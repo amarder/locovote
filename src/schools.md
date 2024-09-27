@@ -62,7 +62,6 @@ const group_list = groups.join(", ");
 const my_query = `SELECT ${group_list}, 100*SUM(${y})/SUM(n) AS y FROM mcas WHERE ORG_CODE IN (${my_list}) GROUP BY ${group_list}`;
 const data = await db.query(my_query);
 const my_plot = Plot.plot({
-  title: "Student performance by school, grade, subject, and year",
   y: {domain: [0, 100], label: y_labels[y]},
   x: {label: x_labels[x]},
   facet: {data: data, y: facets[0], x: facets[1]},
