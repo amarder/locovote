@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "invoke",
+    "selenium>=4.0.0",  # ChromeDriver is also required - install via brew (macOS), apt (Linux), or download from chromedriver.chromium.org (Windows)
     # Add other runtime dependencies here
 ]
 
