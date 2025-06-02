@@ -18,9 +18,10 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "invoke",
-    "selenium>=4.0.0",  # ChromeDriver is also required - install via brew (macOS), apt (Linux), or download from chromedriver.chromium.org (Windows)
-    # Add other runtime dependencies here
+    "invoke>=2.2.0",
+    "selenium>=4.33.0",  # ChromeDriver is also required - install via brew (macOS), apt (Linux), or download from chromedriver.chromium.org (Windows)
+    "requests>=2.32.3",
+    "pandas>=2.2.3",
 ]
 
 [project.urls]
