@@ -1,0 +1,40 @@
+name: Data Processing Pipeline
+
+on:
+  push:
+    branches:
+      - main # Or your default branch
+    tags:
+      - 'v*' # Run on tags like v0.1, v1.0.0
+  pull_request:
+    branches:
+      - main # Or your default branch
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  process-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Specify your Python version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv # Install uv
+          uv pip install . # Use uv to install the current package and its dependencies
+
+      - name: Run data processing
+        run: invoke process_data
+
+      # Add steps here to publish your data, e.g.:
+      # - name: Upload artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: clean-data
+      #     path: path/to/your/clean/datafiles # Update this path 
