@@ -2,14 +2,12 @@ name: Data Processing Pipeline
 
 on:
   push:
-    branches:
-      - main # Or your default branch
     tags:
       - 'v*' # Run on tags like v0.1, v1.0.0
-  pull_request:
-    branches:
-      - main # Or your default branch
   workflow_dispatch: # Allows manual triggering
+
+permissions:
+  contents: write # Required for creating releases
 
 jobs:
   process-data:
@@ -21,21 +19,21 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x' # Specify your Python version
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
-          apt-get install chromium-chromedriver
+          sudo apt-get update
+          sudo apt-get install -y chromium-chromedriver
           python -m pip install --upgrade pip
-          pip install uv # Install uv
-          uv pip install . # Use uv to install the current package and its dependencies
+          pip install . # install the current package and its dependencies
 
-      - name: Run data processing
-        run: invoke process_data
+      - name: Clean data
+        run: invoke clean-data
 
-      # Add steps here to publish your data, e.g.:
-      # - name: Upload artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: clean-data
-      #     path: path/to/your/clean/datafiles # Update this path 
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: data/processed/*
+          fail_on_unmatched_files: true # Fail if no files are found to upload
