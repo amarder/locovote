@@ -17,7 +17,7 @@ TYPES = ["revenues", "expenditures"]
 def setup_chrome(download_dir):
     """Configure Chrome for headless download."""
     options = Options()
-    # options.add_argument("--headless")
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--window-size=1920,1080")
     
@@ -133,32 +133,13 @@ def wait_for_data_table(driver, timeout=30):
         return False
 
 def download_general_fund_data(download_dir=Path("./downloads"), force_download=False):
-    """Download General Fund data for specified fiscal years."""
+    """Download General Fund data from MA DOR Schedule A.
+    
+    Returns:
+        list[Path]: List of paths to the downloaded files
+    """
     download_dir.mkdir(exist_ok=True)
-    
-    # Expected filenames for each fiscal year and type
-    expected_files = {}
-    prefix = {"revenues": "GenFundRevenues",
-              "expenditures": "GenFundExpenditures"}
-    for year in YEARS:
-        for data_type in TYPES:
-            expected_files[f"{year}_{data_type}"] = f"{prefix[data_type]}{year}.xlsx"
-    
-    # Check if all files exist
-    if not force_download:
-        all_exist = True
-        missing_files = []
-        for key, filename in expected_files.items():
-            filepath = download_dir / filename
-            if not filepath.exists():
-                all_exist = False
-                missing_files.append(filename)
-        
-        if all_exist:
-            print("All files already exist. Use force_download=True to redownload.")
-            return
-        else:
-            print("Missing files:", ", ".join(missing_files))
+    downloaded_files = []
     
     with setup_chrome(download_dir) as driver:
         # Navigate to report page with retry logic
@@ -187,11 +168,12 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
         # Process each fiscal year and type
         for year in YEARS:
             for data_type in TYPES:
-                filename = expected_files[f"{year}_{data_type}"]
-                filepath = download_dir / filename
+                expected_filename = f"GenFund{data_type.capitalize()}{year}.xlsx"
+                filepath = download_dir / expected_filename
                 
                 if filepath.exists() and not force_download:
-                    print(f"Found existing file: {filename}")
+                    print(f"Found existing file: {expected_filename}")
+                    downloaded_files.append(filepath)
                     continue
                 
                 print(f"Downloading {year} {data_type}...")
@@ -238,12 +220,13 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                     while time.time() - start_time < 30:
                         if filepath.exists():
                             time.sleep(2)  # Ensure download completes
-                            print(f"Successfully downloaded: {filename}")
+                            print(f"Successfully downloaded: {expected_filename}")
+                            downloaded_files.append(filepath)
                             break
                         time.sleep(1)
                     
                     if not filepath.exists():
-                        print(f"Failed to download: {filename}")
+                        print(f"Failed to download: {expected_filename}")
                     
                     # Brief pause between downloads
                     time.sleep(3)
@@ -251,6 +234,8 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                 except Exception as e:
                     print(f"Error processing {year} {data_type}: {e}")
                     continue
+    
+    return downloaded_files
 
 if __name__ == "__main__":
     download_general_fund_data() 

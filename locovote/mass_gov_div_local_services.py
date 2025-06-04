@@ -47,8 +47,13 @@ def setup_chrome(download_dir):
     return driver
 
 def download_tables(download_dir=Path("./downloads"), force_download=False):
-    """Download all tables from the MA DOR Community Comparison Report."""
+    """Download all tables from the MA DOR Community Comparison Report.
+    
+    Returns:
+        list[Path]: List of paths to the downloaded files
+    """
     download_dir.mkdir(exist_ok=True)
+    downloaded_files = []
     
     # Expected filenames for each tab
     expected_files = {
@@ -71,10 +76,12 @@ def download_tables(download_dir=Path("./downloads"), force_download=False):
             if not filepath.exists():
                 all_exist = False
                 missing_files.append(filename)
+            else:
+                downloaded_files.append(filepath)
         
         if all_exist:
             print("All files already exist. Use force_download=True to redownload.")
-            return
+            return downloaded_files
         else:
             print("Missing files:", ", ".join(missing_files))
     
@@ -115,6 +122,7 @@ def download_tables(download_dir=Path("./downloads"), force_download=False):
             filepath = download_dir / filename
             if filepath.exists() and not force_download:
                 print(f"Found existing file: {filename}")
+                downloaded_files.append(filepath)
                 continue
                 
             print(f"Downloading: {filename}")
@@ -151,6 +159,7 @@ def download_tables(download_dir=Path("./downloads"), force_download=False):
                     if filepath.exists():
                         time.sleep(2)  # Ensure download completes
                         print(f"Successfully downloaded: {filename}")
+                        downloaded_files.append(filepath)
                         break
                     time.sleep(1)
                 
@@ -163,6 +172,8 @@ def download_tables(download_dir=Path("./downloads"), force_download=False):
             except Exception as e:
                 print(f"Error processing {filename}: {e}")
                 continue
+    
+    return downloaded_files
 
 if __name__ == "__main__":
     download_tables()
