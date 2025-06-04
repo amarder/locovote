@@ -6,9 +6,11 @@ import platform
 from locovote.mcas import download_mcas_data
 from locovote.mass_gov_div_local_services import download_tables as download_financial_data
 from locovote.general_fund import download_general_fund_data
+from locovote.mcas_parquet import clean_mcas
 
 DATA_DIR = Path("./data")
 RAW_DIR = DATA_DIR / "raw"
+PROCESSED_DIR = DATA_DIR / "processed"
 
 # Define subdirectories for different data sources
 DOR_GENERAL_FUND_DIR = RAW_DIR / "dor-general-fund"
@@ -82,6 +84,17 @@ def clean_data(c):
     print("Cleaning data...")
     # Your data cleaning logic will go here
     # For example: c.run("python locovote/cleaner.py")
+
+@task(download_mcas)
+def clean_mcas_data(c):
+    """Clean MCAS data and save to processed directory."""
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    input_path = RAW_DIR / "MCAS_Achievement_Results.csv"
+    output_path = PROCESSED_DIR / "mcas.parquet"
+    if output_path.exists:
+        print(f"File {output_path} already exits. Skipping cleaning.")
+    else:
+        clean_mcas(input_path=str(input_path), output_path=str(output_path))
 
 # @task(pre=[download_data, clean_data])
 # def process_data(c):
