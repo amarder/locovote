@@ -5,6 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  PYTHON_ENABLE = "0"
 
 # Uncomment if you need to redirect all traffic to your main domain
 # [[redirects]]
