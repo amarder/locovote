@@ -7,6 +7,7 @@ from locovote.mcas import download_mcas_data
 from locovote.mass_gov_div_local_services import download_tables as download_financial_data
 from locovote.general_fund import download_general_fund_data
 from locovote.mcas_parquet import clean_mcas
+from locovote.finances import clean_dor_data
 
 DATA_DIR = Path("./data")
 RAW_DIR = DATA_DIR / "raw"
@@ -95,6 +96,19 @@ def clean_mcas_data(c):
         print(f"File {output_path} already exits. Skipping cleaning.")
     else:
         clean_mcas(input_path=str(input_path), output_path=str(output_path))
+
+@task(download_dor_community_comparisons, download_dor_general_fund)
+def clean_finance_data(c):
+    paths = {
+        "demographics": DOR_COMMUNITY_COMPARISON_DIR / "CommunityComparisonGeneral.xlsx",
+        "revenue": DOR_COMMUNITY_COMPARISON_DIR / "CC_Revenue_by_Source.xlsx",
+        "levies": DOR_COMMUNITY_COMPARISON_DIR / "CC_Levies_and_Tax_by_Class.xlsx",
+        "spending": DOR_GENERAL_FUND_DIR / "GenFundExpenditures2023.xlsx",
+        "municipalities": PROCESSED_DIR / "municipalities.csv",
+    }
+    for k, v in paths.items():
+        paths[k] = str(v)
+    clean_dor_data(paths)
 
 # @task(pre=[download_data, clean_data])
 # def process_data(c):
