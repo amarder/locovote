@@ -47,13 +47,13 @@ def handle_macos_download(download_func, target_dir):
 
 @task
 def download_mcas(c):
-    """Download MCAS data to the data/raw directory."""
+    """Download MCAS (Massachusetts Comprehensive Assessment System) data."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     download_mcas_data(RAW_DIR)
 
 @task
 def download_dor_community_comparisons(c):
-    """Download Mass DOR Community Comparison Report data."""
+    """Download Massachusetts Department of Revenue (DOR) Community Comparison Reports."""
     if DOR_COMMUNITY_COMPARISON_DIR.exists():
         print(f"Directory {DOR_COMMUNITY_COMPARISON_DIR} already exists. Skipping download.")
         return
@@ -65,7 +65,7 @@ def download_dor_community_comparisons(c):
 
 @task
 def download_dor_general_fund(c):
-    """Download Mass DOR General Fund data."""
+    """Download Massachusetts Department of Revenue (DOR) General Fund data."""
     if DOR_GENERAL_FUND_DIR.exists():
         print(f"Directory {DOR_GENERAL_FUND_DIR} already exists. Skipping download.")
         return
@@ -75,20 +75,9 @@ def download_dor_general_fund(c):
         target_dir=DOR_GENERAL_FUND_DIR
     )
 
-@task(download_mcas, download_dor_community_comparisons, download_dor_general_fund)
-def download_all(c):
-    """Download all data sources."""
-    print("All downloads complete!")
-
-@task
-def clean_data(c):
-    print("Cleaning data...")
-    # Your data cleaning logic will go here
-    # For example: c.run("python locovote/cleaner.py")
-
 @task(download_mcas)
 def clean_mcas_data(c):
-    """Clean MCAS data and save to processed directory."""
+    """Clean and process MCAS achievement data."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     input_path = RAW_DIR / "MCAS_Achievement_Results.csv"
     output_path = PROCESSED_DIR / "mcas.parquet"
@@ -99,6 +88,7 @@ def clean_mcas_data(c):
 
 @task(download_dor_community_comparisons, download_dor_general_fund)
 def clean_finance_data(c):
+    """Clean and process Massachusetts municipal financial data."""
     paths = {
         "demographics": DOR_COMMUNITY_COMPARISON_DIR / "CommunityComparisonGeneral.xlsx",
         "revenue": DOR_COMMUNITY_COMPARISON_DIR / "CC_Revenue_by_Source.xlsx",
@@ -110,6 +100,7 @@ def clean_finance_data(c):
         paths[k] = str(v)
     clean_dor_data(paths)
 
-# @task(pre=[download_data, clean_data])
-# def process_data(c):
-#     print("Data processing complete.")
+@task(clean_mcas_data, clean_finance_data)
+def clean_data(c):
+    """Run all data cleaning tasks in the correct order."""
+    pass
