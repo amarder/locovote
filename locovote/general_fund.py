@@ -9,7 +9,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select
-from selenium.common.exceptions import TimeoutException, NoSuchFrameException
+from selenium.common.exceptions import TimeoutException
+
+YEARS = [2023, 2024]
+TYPES = ["revenues", "expenditures"]
 
 def setup_chrome(download_dir):
     """Configure Chrome for headless download."""
@@ -48,35 +51,6 @@ def setup_chrome(download_dir):
     
     return driver
 
-def wait_for_and_switch_to_iframe(driver, timeout=30):
-    """Wait for iframe to be present and switch to it."""
-    try:
-        print("Waiting for iframe...")
-        # Wait for iframe to be present
-        iframe = WebDriverWait(driver, timeout).until(
-            EC.presence_of_element_located((By.ID, "subGenFund"))
-        )
-        print("Found iframe, checking attributes...")
-        
-        print("Switching to iframe...")
-        # Switch to the iframe
-        driver.switch_to.frame("subGenFund")
-        
-        print("Waiting for page to load completely...")
-        # Wait for the page to be fully loaded inside the iframe
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        
-        # Additional wait for any dynamic content
-        time.sleep(3)
-        
-        return True
-            
-    except Exception as e:
-        print(f"Error switching to iframe: {e}")
-        return False
-
 def select_fiscal_year(driver, year, timeout=30):
     """Select fiscal year using the custom YUI dropdown."""
     try:
@@ -89,9 +63,15 @@ def select_fiscal_year(driver, year, timeout=30):
         year_button.click()
         time.sleep(1)  # Wait for dropdown to open
         
+        # First uncheck any currently checked years
+        checked_boxes = driver.find_elements(By.CSS_SELECTOR, "input[name='islYear']:checked")
+        for checkbox in checked_boxes:
+            checkbox.click()
+            time.sleep(0.5)
+        
         # Find and click the specific year checkbox
         year_checkbox = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, f"input[value='{year}']"))
+            EC.element_to_be_clickable((By.CSS_SELECTOR, f"input[name='islYear'][value='{year}']"))
         )
         year_checkbox.click()
         time.sleep(1)  # Wait for selection to register
@@ -99,6 +79,12 @@ def select_fiscal_year(driver, year, timeout=30):
         # Click somewhere else to close the dropdown
         driver.execute_script("arguments[0].click();", driver.find_element(By.TAG_NAME, "body"))
         time.sleep(1)
+        
+        # Verify the selection took effect by checking the button text
+        button_text = year_button.find_element(By.CLASS_NAME, "rd-checkboxlist-caption").text
+        if str(year) not in button_text:
+            print(f"Year selection verification failed. Button shows: {button_text}")
+            return False
         
         return True
     except Exception as e:
@@ -117,27 +103,33 @@ def select_amount_type(driver, amount_type, timeout=30):
         Select(amount_select).select_by_value(amount_type.capitalize())
         time.sleep(1)
         
+        # Verify the selection took effect
+        selected_option = Select(amount_select).first_selected_option
+        if selected_option.get_attribute("value") != amount_type.capitalize():
+            print(f"Amount type selection verification failed. Selected: {selected_option.get_attribute('value')}")
+            return False
+        
         return True
     except Exception as e:
         print(f"Error selecting amount type: {e}")
         return False
 
-def verify_iframe_state(driver):
-    """Verify we're in the correct iframe state."""
+def wait_for_data_table(driver, timeout=30):
+    """Wait for the data table to load after submitting."""
     try:
-        # Try to find any select elements
-        selects = driver.find_elements(By.TAG_NAME, "select")
-        if not selects:
-            return False
-            
-        # Check if we have the amount type selector
-        amount_type = driver.find_element(By.ID, "islAmountType")
-        if amount_type:
-            print("Found amount type selector")
-            return True
-            
-        return False
-    except:
+        print("Waiting for data table to load...")
+        # Wait for the data table to be present and visible
+        table = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.ID, "xtGenFund"))
+        )
+        # Wait for at least one data row
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "#xtGenFund tbody tr"))
+        )
+        print("Data table loaded successfully")
+        return True
+    except Exception as e:
+        print(f"Error waiting for data table: {e}")
         return False
 
 def download_general_fund_data(download_dir=Path("./downloads"), force_download=False):
@@ -146,8 +138,11 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
     
     # Expected filenames for each fiscal year and type
     expected_files = {}
-    for year in [2023]:
-        expected_files[f"{year}_revenues"] = f"GenFundRevenues{year}.xlsx"
+    prefix = {"revenues": "GenFundRevenues",
+              "expenditures": "GenFundExpenditures"}
+    for year in YEARS:
+        for data_type in TYPES:
+            expected_files[f"{year}_{data_type}"] = f"{prefix[data_type]}{year}.xlsx"
     
     # Check if all files exist
     if not force_download:
@@ -171,17 +166,13 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
         for attempt in range(max_retries):
             try:
                 print(f"Attempting to load page (attempt {attempt + 1}/{max_retries})")
-                driver.get("https://dls-gw.dor.state.ma.us/reports/rdpage.aspx?rdreport=schedulea.genfund_main")
+                driver.get("https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=ScheduleA.GeneralFund")
                 
-                # Wait for page load and handle iframe
-                if not wait_for_and_switch_to_iframe(driver):
-                    if attempt < max_retries - 1:
-                        print("Failed to switch to iframe, retrying...")
-                        driver.refresh()
-                        time.sleep(5 + (attempt * 2))
-                        continue
-                    else:
-                        raise Exception("Failed to switch to iframe after all retries")
+                # Wait for page to load completely
+                WebDriverWait(driver, 30).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
+                time.sleep(3)  # Additional wait for any dynamic content
                 
                 print("Page loaded successfully")
                 break
@@ -194,8 +185,8 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                 raise
         
         # Process each fiscal year and type
-        for year in [2023]:
-            for data_type in ['revenues']:
+        for year in YEARS:
+            for data_type in TYPES:
                 filename = expected_files[f"{year}_{data_type}"]
                 filepath = download_dir / filename
                 
@@ -224,10 +215,15 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                     driver.execute_script("arguments[0].click();", submit_btn)
                     print("Successfully clicked submit")
                     
+                    # Wait for data table to load
+                    if not wait_for_data_table(driver):
+                        print("Failed to load data table")
+                        continue
+                    
                     print("Waiting for export button...")
                     # Wait for results and export button
                     export_btn = WebDriverWait(driver, 30).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "input[value='Export to Excel']"))
+                        EC.element_to_be_clickable((By.ID, "btnExport"))
                     )
                     time.sleep(2)  # Give the page a moment to fully load
                     
@@ -254,9 +250,6 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                     
                 except Exception as e:
                     print(f"Error processing {year} {data_type}: {e}")
-                    # Print the current page source for debugging
-                    print("\nCurrent page source:")
-                    print(driver.page_source[:1000])
                     continue
 
 if __name__ == "__main__":
