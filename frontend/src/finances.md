@@ -89,5 +89,3 @@ This visualization has a few objectives:
 - How big are these numbers (totals, percentages, and per resident)?
 
 Data comes from the [Division of Local Services Municipal Databank](https://www.mass.gov/info-details/division-of-local-services-municipal-databank).
-
-```
