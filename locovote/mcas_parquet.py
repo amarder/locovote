@@ -5,7 +5,7 @@ from pathlib import Path
 def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_path='mcas.parquet'):
     # Read the CSV file
     path = os.path.expanduser(input_path)
-    combined = pd.read_csv(path)
+    combined = pd.read_csv(path, dtype={'ORG_CODE': str})
     print(combined.head())
     combined = combined[combined['STU_GRP'] == 'All Students']
 
@@ -26,7 +26,8 @@ def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_pat
         grade=output['TEST_GRADE'].astype(int),
         n_me=output['M_PLUS_E_CNT'].astype(int),
         n_e=output['E_CNT'].astype(int),
-        n=output['STU_CNT'].astype(int)
+        n=output['STU_CNT'].astype(int),
+        ORG_CODE=output['ORG_CODE'].astype(str)
     )
 
     # Drop original columns
