@@ -1,0 +1,13 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Uncomment if you need to redirect all traffic to your main domain
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
