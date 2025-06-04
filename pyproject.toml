@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "locovote"
+version = "0.1.0"
+authors = [
+  # { name="Your Name", email="you@example.com" }, # Add your details here
+]
+description = "A package for downloading and cleaning data for the locovote project."
+readme = "README.md" # Assuming you will have a README.md
+license = {text = "MIT License"} # Updated license specification
+requires-python = ">=3.8" # Specify your minimum Python version
+classifiers = [
+    "Programming Language :: Python :: 3",
+    # "License :: OSI Approved :: MIT License", # Removed deprecated classifier
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "invoke>=2.2.0",
+    "selenium>=4.33.0",  # ChromeDriver is also required - install via brew (macOS), apt (Linux), or download from chromedriver.chromium.org (Windows)
+    "requests>=2.32.3",
+    "pandas>=2.2.3",
+    "pyarrow>=20.0.0",
+    "openpyxl>=3.1.5",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/locovote" # Replace with your repo URL
+"Bug Tracker" = "https://github.com/yourusername/locovote/issues" # Replace with your repo URL
+
+[tool.setuptools.packages.find]
+where = ["."] # Look in the current directory
+include = ["locovote*"]  # Include only the locovote package
+exclude = ["frontend*", "data*", "R*"] # Explicitly exclude other top-level dirs if necessary, though `include` should be enough
+
+# If you plan to have optional dependencies or entry points (console scripts),
+# they can be defined here as well.
+# [project.optional-dependencies]
+# dev = ["pytest"]
+
+# [project.scripts]
+# my-script = "locovote.module:function" 
