@@ -43,3 +43,29 @@ jobs:
         with:
           files: data/processed/*
           fail_on_unmatched_files: true # Fail if no files are found to upload
+
+      # - name: Configure AWS Credentials
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      #     aws-region: auto
+      #     endpoint-url: https://2dbc8ec4fc56f55a49b6accffcea925a.r2.cloudflarestorage.com
+
+      # - name: Upload to R2
+      #   run: |
+      #     # Upload CSV files with appropriate content type
+      #     aws s3 sync data/processed/ s3://${{ secrets.R2_BUCKET_NAME }}/data/ \
+      #       --endpoint-url https://2dbc8ec4fc56f55a49b6accffcea925a.r2.cloudflarestorage.com \
+      #       --exclude "*" \
+      #       --include "*.csv" \
+      #       --content-type "text/csv" \
+      #       --cache-control "public, max-age=86400"
+          
+      #     # Upload Parquet files with appropriate content type
+      #     aws s3 sync data/processed/ s3://${{ secrets.R2_BUCKET_NAME }}/data/ \
+      #       --endpoint-url https://2dbc8ec4fc56f55a49b6accffcea925a.r2.cloudflarestorage.com \
+      #       --exclude "*" \
+      #       --include "*.parquet" \
+      #       --content-type "application/vnd.apache.parquet" \
+      #       --cache-control "public, max-age=86400"

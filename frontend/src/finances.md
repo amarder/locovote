@@ -2,10 +2,10 @@
 title: Taxes and Spending
 ---
 
-# Taxes and Spending
-
 ```js
-const municipalities = FileAttachment("./data/municipalities.csv").csv({typed: true})
+const municipalities = await fetch("https://data.locovote.com/municipalities.csv")
+  .then(response => response.text())
+  .then(csvText => d3.csvParse(csvText, d3.autoType));
 ```
 
 ```js
@@ -89,3 +89,5 @@ This visualization has a few objectives:
 - How big are these numbers (totals, percentages, and per resident)?
 
 Data comes from the [Division of Local Services Municipal Databank](https://www.mass.gov/info-details/division-of-local-services-municipal-databank).
+
+```
