@@ -3,9 +3,7 @@ title: Taxes and Spending
 ---
 
 ```js
-const municipalities = await fetch("https://data.locovote.com/municipalities.csv")
-  .then(response => response.text())
-  .then(csvText => d3.csvParse(csvText, d3.autoType));
+const municipalities = FileAttachment("./data/municipalities.csv").csv({typed: true})
 ```
 
 ```js

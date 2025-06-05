@@ -5,7 +5,7 @@ title: Schools
 # Schools
 
 ```js
-const db = DuckDBClient.of({mcas: "https://data.locovote.com/mcas.parquet"});
+const db = DuckDBClient.of({mcas: FileAttachment("./data/mcas.parquet")});
 ```
 
 ```js

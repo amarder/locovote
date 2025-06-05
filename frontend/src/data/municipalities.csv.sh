@@ -1,0 +1,1 @@
+curl -L -f -o - https://github.com/amarder/locovote/releases/download/v0.1.0/municipalities.csv
