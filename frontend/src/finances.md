@@ -2,8 +2,6 @@
 title: Taxes and Spending
 ---
 
-# Taxes and Spending
-
 ```js
 const municipalities = FileAttachment("./data/municipalities.csv").csv({typed: true})
 ```

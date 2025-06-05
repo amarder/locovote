@@ -5,12 +5,14 @@ title: Schools
 # Schools
 
 ```js
-const db = DuckDBClient.of({mcas: FileAttachment("./data/mcas.parquet")});
+import SQLite from "npm:@observablehq/sqlite";
+
+const db = FileAttachment("data/mcas.db").sqlite();
 ```
 
 ```js
 // const schools = db.query("SELECT DISTINCT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code FROM mcas ORDER BY district, school");
-const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code, ends_with(school_code, '0000') AS is_district, 100*SUM(n_e)/SUM(n) AS pct_e, 100*SUM(n_me)/SUM(n) AS pct_me FROM mcas GROUP BY DIST_NAME, ORG_NAME, ORG_CODE ORDER BY district, school");
+const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_CODE AS school_code, SUBSTR(ORG_CODE, -4) = '0000' AS is_district, 100*SUM(n_e)/SUM(n) AS pct_e, 100*SUM(n_me)/SUM(n) AS pct_me FROM mcas GROUP BY DIST_NAME, ORG_NAME, ORG_CODE ORDER BY district, school");
 
 ```
 

@@ -80,7 +80,7 @@ def clean_mcas_data(c):
     """Clean and process MCAS achievement data."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     input_path = RAW_DIR / "MCAS_Achievement_Results.csv"
-    output_path = PROCESSED_DIR / "mcas.parquet"
+    output_path = PROCESSED_DIR / "mcas.db"
     if output_path.exists():
         print(f"File {output_path} already exits. Skipping cleaning.")
     else:

@@ -1,0 +1,9 @@
+[pages]
+directory = "frontend/dist"
+compatibility_date = "2024-03-05"
+
+[pages.build]
+command = "cd frontend && npm install && npm run build"
+
+[pages.build.environment]
+NODE_VERSION = "20" 
