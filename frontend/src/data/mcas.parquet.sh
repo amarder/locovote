@@ -1,1 +1,0 @@
-curl -L -f https://github.com/amarder/locovote/releases/download/v0.1.0/mcas.parquet
