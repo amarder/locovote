@@ -1,8 +1,9 @@
 import pandas as pd
 import os
+import sqlite3
 from pathlib import Path
 
-def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_path='mcas.parquet'):
+def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_path='mcas.db'):
     # Read the CSV file
     path = os.path.expanduser(input_path)
     combined = pd.read_csv(path, dtype={'ORG_CODE': str})
@@ -33,5 +34,7 @@ def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_pat
     # Drop original columns
     output = output.drop(['M_PLUS_E_CNT', 'E_CNT', 'STU_CNT', 'TEST_GRADE', 'SY'], axis=1)
 
-    # Write to parquet
-    output.to_parquet(output_path)
+    # Write to SQLite database
+    conn = sqlite3.connect(output_path)
+    output.to_sql('mcas', conn, if_exists='replace', index=False)
+    conn.close()

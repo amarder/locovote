@@ -15,7 +15,7 @@ Locovote makes town data easy to navigate so you can find towns that match your 
 What does each town spend money on and who's paying for it?
 </div>
 <div class="card">
-<a href="/">Schools WIP</a>
+<a href="/schools">Schools</a>
 
 How are students performing on standardized tests?
 </div>
