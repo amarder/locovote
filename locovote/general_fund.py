@@ -11,7 +11,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import TimeoutException, WebDriverException, StaleElementReferenceException
 
-YEARS = range(2002, 2025)
+YEARS = range(2002, 2003)
 TYPES = ["revenues", "expenditures"]
 
 def setup_chrome(download_dir):
@@ -34,6 +34,12 @@ def setup_chrome(download_dir):
     options.add_argument("--no-zygote")
     options.add_argument("--disable-web-security")
     options.add_argument("--disable-features=VizDisplayCompositor")
+    
+    # Memory and performance optimizations for CI environments
+    options.add_argument("--memory-pressure-off")
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-renderer-backgrounding")
+    options.add_argument("--disable-backgrounding-occluded-windows")
     
     # Download settings
     options.add_experimental_option("prefs", {
@@ -78,32 +84,38 @@ def wait_for_page_stability(driver, timeout=10):
         print(f"Warning: Page stability check failed: {e}")
         return False
 
-def refresh_page_if_needed(driver, max_attempts=3):
-    """Refresh the page if it seems to be in a bad state."""
+def load_page_with_retries(driver, max_attempts=3):
+    """Load the main page with retry logic."""
     for attempt in range(max_attempts):
         try:
-            print(f"Refreshing page (attempt {attempt + 1}/{max_attempts})")
-            driver.refresh()
-            wait_for_page_stability(driver)
+            print(f"Loading page (attempt {attempt + 1}/{max_attempts})")
+            driver.get("https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=ScheduleA.GeneralFund")
             
-            # Check if key elements are present
-            WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.ID, "islYear_handler"))
-            )
-            WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.ID, "islAmountType"))
-            )
-            
-            print("Page refresh successful")
-            return True
+            if wait_for_page_stability(driver, timeout=30):
+                # Verify key elements are present
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.ID, "islYear_handler"))
+                )
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.ID, "islAmountType"))
+                )
+                print("Page loaded successfully")
+                return True
+            else:
+                raise Exception("Page stability check failed")
+                
         except Exception as e:
-            print(f"Page refresh attempt {attempt + 1} failed: {e}")
             if attempt < max_attempts - 1:
-                time.sleep(5)
+                print(f"Error loading page: {e}")
+                time.sleep(5 + (attempt * 2))
+                continue
+            else:
+                print(f"Failed to load page after {max_attempts} attempts: {e}")
+                return False
     
     return False
 
-def select_fiscal_year(driver, year, timeout=30, max_retries=3):
+def select_fiscal_year(driver, year, timeout=30, max_retries=2):
     """Select fiscal year using the custom YUI dropdown with retry logic."""
     for attempt in range(max_retries):
         try:
@@ -181,18 +193,13 @@ def select_fiscal_year(driver, year, timeout=30, max_retries=3):
             if attempt < max_retries - 1:
                 print("Waiting before retry...")
                 time.sleep(3 + attempt)  # Progressive backoff
-                
-                # Try refreshing the page if we're having persistent issues
-                if attempt >= 1:
-                    if not refresh_page_if_needed(driver):
-                        print("Could not refresh page, continuing with next attempt")
             else:
                 print(f"Failed to select fiscal year {year} after {max_retries} attempts")
                 return False
     
     return False
 
-def select_amount_type(driver, amount_type, timeout=30, max_retries=3):
+def select_amount_type(driver, amount_type, timeout=30, max_retries=2):
     """Select amount type (revenues/expenditures) using the dropdown with retry logic."""
     for attempt in range(max_retries):
         try:
@@ -249,14 +256,22 @@ def wait_for_data_table(driver, timeout=30):
         print(f"Error waiting for data table: {e}")
         return False
 
-def process_single_download(driver, year, data_type, download_dir, max_retries=3):
-    """Process a single download with comprehensive error handling and retries."""
+def download_single_file(year, data_type, download_dir, max_retries=3):
+    """Download a single file using a fresh browser session."""
     expected_filename = f"GenFund{data_type.capitalize()}{year}.xlsx"
     filepath = download_dir / expected_filename
     
     for attempt in range(max_retries):
+        driver = None
         try:
-            print(f"Processing {year} {data_type} (attempt {attempt + 1}/{max_retries})...")
+            print(f"Downloading {year} {data_type} (attempt {attempt + 1}/{max_retries})...")
+            
+            # Create fresh driver for each attempt
+            driver = setup_chrome(download_dir)
+            
+            # Load the page
+            if not load_page_with_retries(driver):
+                raise Exception("Failed to load page")
             
             # Select fiscal year
             if not select_fiscal_year(driver, year):
@@ -307,17 +322,22 @@ def process_single_download(driver, year, data_type, download_dir, max_retries=3
             raise Exception(f"Download timeout: {expected_filename}")
             
         except Exception as e:
-            print(f"Error processing {year} {data_type} (attempt {attempt + 1}): {e}")
+            print(f"Error downloading {year} {data_type} (attempt {attempt + 1}): {e}")
             if attempt < max_retries - 1:
                 print("Waiting before retry...")
                 time.sleep(5 + (attempt * 2))  # Progressive backoff
-                
-                # Try refreshing the page for the next attempt
-                if not refresh_page_if_needed(driver):
-                    print("Could not refresh page, continuing anyway")
             else:
                 print(f"Failed to download {year} {data_type} after {max_retries} attempts")
                 return None
+        
+        finally:
+            # Always cleanup the driver after each attempt
+            if driver:
+                try:
+                    driver.quit()
+                    time.sleep(2)  # Give time for cleanup
+                except Exception as e:
+                    print(f"Error closing driver: {e}")
     
     return None
 
@@ -330,31 +350,8 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
     download_dir.mkdir(exist_ok=True)
     downloaded_files = []
     
-    driver = None
     try:
-        driver = setup_chrome(download_dir)
-        
-        # Navigate to report page with retry logic
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                print(f"Loading page (attempt {attempt + 1}/{max_retries})")
-                driver.get("https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=ScheduleA.GeneralFund")
-                
-                if wait_for_page_stability(driver, timeout=30):
-                    print("Page loaded successfully")
-                    break
-                else:
-                    raise Exception("Page stability check failed")
-                    
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    print(f"Error loading page: {e}")
-                    time.sleep(5 + (attempt * 2))
-                    continue
-                raise
-        
-        # Process each fiscal year and type
+        # Process each fiscal year and type with individual browser sessions
         for year in YEARS:
             for data_type in TYPES:
                 expected_filename = f"GenFund{data_type.capitalize()}{year}.xlsx"
@@ -365,26 +362,22 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                     downloaded_files.append(filepath)
                     continue
                 
-                # Process the download with retries
-                result_path = process_single_download(driver, year, data_type, download_dir)
+                # Download with fresh browser session
+                result_path = download_single_file(year, data_type, download_dir)
                 if result_path:
                     downloaded_files.append(result_path)
                 else:
                     print(f"Skipping {year} {data_type} due to persistent errors")
                 
-                # Brief pause between downloads
-                time.sleep(2)
+                # Brief pause between downloads to be nice to the server
+                time.sleep(3)
     
+    except KeyboardInterrupt:
+        print("Download interrupted by user")
     except Exception as e:
         print(f"Critical error in download process: {e}")
     
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception as e:
-                print(f"Error closing driver: {e}")
-    
+    print(f"Downloaded {len(downloaded_files)} files successfully")
     return downloaded_files
 
 if __name__ == "__main__":
