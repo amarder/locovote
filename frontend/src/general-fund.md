@@ -82,7 +82,7 @@ const selectedMunicipalities = view(Inputs.select(
   {
     label: "Select Municipalities", 
     multiple: true, 
-    value: ["Abington", "Boston", "Cambridge"],
+    value: ["Weston", "Wayland"],
     sort: true
   }
 ))
@@ -99,6 +99,7 @@ Plot.plot({
   y: {
     grid: true,
     label: selectedVariable.label,
+    domain: [0, d3.max(filteredMunicipalities, d => d[selectedVariable.id]) / 1_000_000 ],
     transform: d => d / 1_000_000, // Convert to millions
     tickFormat: "~s"
   },
