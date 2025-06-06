@@ -11,6 +11,7 @@ import glob
 import re
 from pathlib import Path
 import warnings
+import pyarrow as pa
 
 # Suppress openpyxl warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
@@ -270,7 +271,7 @@ def main():
     
     # Define paths
     data_dir = Path('data/raw/dor-general-fund')
-    output_file = 'data/processed/combined_general_fund.csv'
+    output_file = 'data/processed/combined_general_fund.arrow'
     
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -386,9 +387,9 @@ def main():
     validate_expenditure_totals(temp_df)
     validate_revenue_totals(temp_df)
     
-    # Save to CSV
+    # Save to Arrow format
     print(f"\nSaving combined data to {output_file}...")
-    final_df.to_csv(output_file, index=False)
+    final_df.to_feather(output_file, compression="uncompressed")
     
     # Print summary statistics
     print(f"\n=== SUMMARY ===")

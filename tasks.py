@@ -8,6 +8,7 @@ from locovote.mass_gov_div_local_services import download_tables as download_fin
 from locovote.general_fund import download_general_fund_data
 from locovote.mcas_parquet import clean_mcas
 from locovote.finances import clean_dor_data
+from locovote.clean_general_fund import main as clean_general_fund
 
 DATA_DIR = Path("./data")
 RAW_DIR = DATA_DIR / "raw"
@@ -100,7 +101,17 @@ def clean_finance_data(c):
         paths[k] = str(v)
     clean_dor_data(paths)
 
-@task(clean_mcas_data, clean_finance_data)
+@task(download_dor_general_fund)
+def clean_dor_general_fund(c):
+    """Clean and process Massachusetts DOR General Fund data."""
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = PROCESSED_DIR / "combined_general_fund.arrow"
+    if output_path.exists():
+        print(f"File {output_path} already exists. Skipping cleaning.")
+    else:
+        clean_general_fund()
+
+@task(clean_mcas_data, clean_finance_data, clean_dor_general_fund)
 def clean_data(c):
     """Run all data cleaning tasks in the correct order."""
     pass

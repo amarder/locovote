@@ -1,0 +1,1 @@
+cat ../data/processed/combined_general_fund.arrow
