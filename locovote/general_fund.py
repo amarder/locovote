@@ -9,7 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException, StaleElementReferenceException
 
 YEARS = range(2002, 2025)
 TYPES = ["revenues", "expenditures"]
@@ -27,6 +27,13 @@ def setup_chrome(download_dir):
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
+    # Additional stability options for cloud environments
+    options.add_argument("--disable-gpu")
+    options.add_argument("--single-process")
+    options.add_argument("--no-zygote")
+    options.add_argument("--disable-web-security")
+    options.add_argument("--disable-features=VizDisplayCompositor")
     
     # Download settings
     options.add_experimental_option("prefs", {
@@ -51,68 +58,178 @@ def setup_chrome(download_dir):
     
     return driver
 
-def select_fiscal_year(driver, year, timeout=30):
-    """Select fiscal year using the custom YUI dropdown."""
+def wait_for_page_stability(driver, timeout=10):
+    """Wait for page to be stable and ready for interaction."""
     try:
-        print(f"Selecting fiscal year {year}...")
-        
-        # Find and click the year dropdown button
-        year_button = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.ID, "islYear_handler"))
+        # Wait for document ready state
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
         )
-        year_button.click()
-        time.sleep(1)  # Wait for dropdown to open
         
-        # First uncheck any currently checked years
-        checked_boxes = driver.find_elements(By.CSS_SELECTOR, "input[name='islYear']:checked")
-        for checkbox in checked_boxes:
-            checkbox.click()
-            time.sleep(0.5)
-        
-        # Find and click the specific year checkbox
-        year_checkbox = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, f"input[name='islYear'][value='{year}']"))
+        # Wait for jQuery to be loaded and ready (if present)
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return typeof jQuery == 'undefined' || jQuery.active == 0")
         )
-        year_checkbox.click()
-        time.sleep(1)  # Wait for selection to register
         
-        # Click somewhere else to close the dropdown
-        driver.execute_script("arguments[0].click();", driver.find_element(By.TAG_NAME, "body"))
-        time.sleep(1)
-        
-        # Verify the selection took effect by checking the button text
-        button_text = year_button.find_element(By.CLASS_NAME, "rd-checkboxlist-caption").text
-        if str(year) not in button_text:
-            print(f"Year selection verification failed. Button shows: {button_text}")
-            return False
-        
+        # Additional wait for any dynamic content
+        time.sleep(2)
         return True
     except Exception as e:
-        print(f"Error selecting fiscal year: {e}")
+        print(f"Warning: Page stability check failed: {e}")
         return False
 
-def select_amount_type(driver, amount_type, timeout=30):
-    """Select amount type (revenues/expenditures) using the dropdown."""
-    try:
-        print(f"Selecting {amount_type}...")
-        
-        # Find and click the amount type dropdown
-        amount_select = WebDriverWait(driver, timeout).until(
-            EC.element_to_be_clickable((By.ID, "islAmountType"))
-        )
-        Select(amount_select).select_by_value(amount_type.capitalize())
-        time.sleep(1)
-        
-        # Verify the selection took effect
-        selected_option = Select(amount_select).first_selected_option
-        if selected_option.get_attribute("value") != amount_type.capitalize():
-            print(f"Amount type selection verification failed. Selected: {selected_option.get_attribute('value')}")
-            return False
-        
-        return True
-    except Exception as e:
-        print(f"Error selecting amount type: {e}")
-        return False
+def refresh_page_if_needed(driver, max_attempts=3):
+    """Refresh the page if it seems to be in a bad state."""
+    for attempt in range(max_attempts):
+        try:
+            print(f"Refreshing page (attempt {attempt + 1}/{max_attempts})")
+            driver.refresh()
+            wait_for_page_stability(driver)
+            
+            # Check if key elements are present
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.ID, "islYear_handler"))
+            )
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.ID, "islAmountType"))
+            )
+            
+            print("Page refresh successful")
+            return True
+        except Exception as e:
+            print(f"Page refresh attempt {attempt + 1} failed: {e}")
+            if attempt < max_attempts - 1:
+                time.sleep(5)
+    
+    return False
+
+def select_fiscal_year(driver, year, timeout=30, max_retries=3):
+    """Select fiscal year using the custom YUI dropdown with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            print(f"Selecting fiscal year {year} (attempt {attempt + 1}/{max_retries})...")
+            
+            # Wait for page stability before attempting
+            wait_for_page_stability(driver)
+            
+            # Find and click the year dropdown button
+            year_button = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((By.ID, "islYear_handler"))
+            )
+            
+            # Scroll to element and ensure it's in view
+            driver.execute_script("arguments[0].scrollIntoView(true);", year_button)
+            time.sleep(1)
+            
+            # Try clicking with JavaScript if regular click fails
+            try:
+                year_button.click()
+            except WebDriverException:
+                driver.execute_script("arguments[0].click();", year_button)
+            
+            time.sleep(2)  # Wait for dropdown to open
+            
+            # First uncheck any currently checked years
+            try:
+                checked_boxes = driver.find_elements(By.CSS_SELECTOR, "input[name='islYear']:checked")
+                for checkbox in checked_boxes:
+                    if checkbox.is_displayed() and checkbox.is_enabled():
+                        try:
+                            checkbox.click()
+                        except (StaleElementReferenceException, WebDriverException):
+                            # Element might have become stale, try with JavaScript
+                            driver.execute_script("arguments[0].click();", checkbox)
+                    time.sleep(0.5)
+            except Exception as e:
+                print(f"Warning: Could not uncheck existing selections: {e}")
+            
+            # Find and click the specific year checkbox
+            year_checkbox = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, f"input[name='islYear'][value='{year}']"))
+            )
+            
+            # Ensure checkbox is visible and clickable
+            driver.execute_script("arguments[0].scrollIntoView(true);", year_checkbox)
+            time.sleep(1)
+            
+            try:
+                year_checkbox.click()
+            except WebDriverException:
+                driver.execute_script("arguments[0].click();", year_checkbox)
+            
+            time.sleep(2)  # Wait for selection to register
+            
+            # Click somewhere else to close the dropdown
+            driver.execute_script("arguments[0].click();", driver.find_element(By.TAG_NAME, "body"))
+            time.sleep(2)
+            
+            # Verify the selection took effect by checking the button text
+            try:
+                button_text = year_button.find_element(By.CLASS_NAME, "rd-checkboxlist-caption").text
+                if str(year) in button_text:
+                    print(f"Successfully selected fiscal year {year}")
+                    return True
+                else:
+                    print(f"Year selection verification failed. Button shows: {button_text}")
+            except Exception as e:
+                print(f"Could not verify year selection: {e}")
+                # If we can't verify, assume it worked and continue
+                return True
+            
+        except Exception as e:
+            print(f"Error selecting fiscal year (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                print("Waiting before retry...")
+                time.sleep(3 + attempt)  # Progressive backoff
+                
+                # Try refreshing the page if we're having persistent issues
+                if attempt >= 1:
+                    if not refresh_page_if_needed(driver):
+                        print("Could not refresh page, continuing with next attempt")
+            else:
+                print(f"Failed to select fiscal year {year} after {max_retries} attempts")
+                return False
+    
+    return False
+
+def select_amount_type(driver, amount_type, timeout=30, max_retries=3):
+    """Select amount type (revenues/expenditures) using the dropdown with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            print(f"Selecting {amount_type} (attempt {attempt + 1}/{max_retries})...")
+            
+            # Wait for page stability
+            wait_for_page_stability(driver)
+            
+            # Find and click the amount type dropdown
+            amount_select = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((By.ID, "islAmountType"))
+            )
+            
+            # Scroll to element
+            driver.execute_script("arguments[0].scrollIntoView(true);", amount_select)
+            time.sleep(1)
+            
+            Select(amount_select).select_by_value(amount_type.capitalize())
+            time.sleep(2)
+            
+            # Verify the selection took effect
+            selected_option = Select(amount_select).first_selected_option
+            if selected_option.get_attribute("value") == amount_type.capitalize():
+                print(f"Successfully selected {amount_type}")
+                return True
+            else:
+                print(f"Amount type selection verification failed. Selected: {selected_option.get_attribute('value')}")
+            
+        except Exception as e:
+            print(f"Error selecting amount type (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 + attempt)
+            else:
+                print(f"Failed to select amount type {amount_type} after {max_retries} attempts")
+                return False
+    
+    return False
 
 def wait_for_data_table(driver, timeout=30):
     """Wait for the data table to load after submitting."""
@@ -132,6 +249,78 @@ def wait_for_data_table(driver, timeout=30):
         print(f"Error waiting for data table: {e}")
         return False
 
+def process_single_download(driver, year, data_type, download_dir, max_retries=3):
+    """Process a single download with comprehensive error handling and retries."""
+    expected_filename = f"GenFund{data_type.capitalize()}{year}.xlsx"
+    filepath = download_dir / expected_filename
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"Processing {year} {data_type} (attempt {attempt + 1}/{max_retries})...")
+            
+            # Select fiscal year
+            if not select_fiscal_year(driver, year):
+                raise Exception(f"Failed to select fiscal year {year}")
+            
+            # Select amount type
+            if not select_amount_type(driver, data_type):
+                raise Exception(f"Failed to select amount type {data_type}")
+            
+            print("Clicking submit button...")
+            # Click submit button
+            submit_btn = WebDriverWait(driver, 15).until(
+                EC.element_to_be_clickable((By.ID, "btnSubmit"))
+            )
+            driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
+            time.sleep(1)
+            driver.execute_script("arguments[0].click();", submit_btn)
+            print("Successfully clicked submit")
+            
+            # Wait for data table to load
+            if not wait_for_data_table(driver):
+                raise Exception("Failed to load data table")
+            
+            print("Waiting for export button...")
+            # Wait for results and export button
+            export_btn = WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.ID, "btnExport"))
+            )
+            time.sleep(2)  # Give the page a moment to fully load
+            
+            print("Clicking export button...")
+            # Click export
+            driver.execute_script("arguments[0].scrollIntoView(true);", export_btn)
+            time.sleep(1)
+            driver.execute_script("arguments[0].click();", export_btn)
+            print("Successfully clicked export")
+            
+            # Wait for download
+            print("Waiting for file download...")
+            start_time = time.time()
+            while time.time() - start_time < 45:  # Increased timeout
+                if filepath.exists():
+                    time.sleep(3)  # Ensure download completes
+                    print(f"Successfully downloaded: {expected_filename}")
+                    return filepath
+                time.sleep(1)
+            
+            raise Exception(f"Download timeout: {expected_filename}")
+            
+        except Exception as e:
+            print(f"Error processing {year} {data_type} (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                print("Waiting before retry...")
+                time.sleep(5 + (attempt * 2))  # Progressive backoff
+                
+                # Try refreshing the page for the next attempt
+                if not refresh_page_if_needed(driver):
+                    print("Could not refresh page, continuing anyway")
+            else:
+                print(f"Failed to download {year} {data_type} after {max_retries} attempts")
+                return None
+    
+    return None
+
 def download_general_fund_data(download_dir=Path("./downloads"), force_download=False):
     """Download General Fund data from MA DOR Schedule A.
     
@@ -141,23 +330,23 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
     download_dir.mkdir(exist_ok=True)
     downloaded_files = []
     
-    with setup_chrome(download_dir) as driver:
+    driver = None
+    try:
+        driver = setup_chrome(download_dir)
+        
         # Navigate to report page with retry logic
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                print(f"Attempting to load page (attempt {attempt + 1}/{max_retries})")
+                print(f"Loading page (attempt {attempt + 1}/{max_retries})")
                 driver.get("https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=ScheduleA.GeneralFund")
                 
-                # Wait for page to load completely
-                WebDriverWait(driver, 30).until(
-                    lambda d: d.execute_script("return document.readyState") == "complete"
-                )
-                time.sleep(3)  # Additional wait for any dynamic content
-                
-                print("Page loaded successfully")
-                break
-                
+                if wait_for_page_stability(driver, timeout=30):
+                    print("Page loaded successfully")
+                    break
+                else:
+                    raise Exception("Page stability check failed")
+                    
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"Error loading page: {e}")
@@ -176,64 +365,25 @@ def download_general_fund_data(download_dir=Path("./downloads"), force_download=
                     downloaded_files.append(filepath)
                     continue
                 
-                print(f"Downloading {year} {data_type}...")
+                # Process the download with retries
+                result_path = process_single_download(driver, year, data_type, download_dir)
+                if result_path:
+                    downloaded_files.append(result_path)
+                else:
+                    print(f"Skipping {year} {data_type} due to persistent errors")
                 
-                try:
-                    # Select fiscal year
-                    if not select_fiscal_year(driver, year):
-                        print(f"Failed to select fiscal year {year}")
-                        continue
-                    
-                    # Select amount type
-                    if not select_amount_type(driver, data_type):
-                        print(f"Failed to select amount type {data_type}")
-                        continue
-                    
-                    print("Clicking submit button...")
-                    # Click submit button
-                    submit_btn = WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.ID, "btnSubmit"))
-                    )
-                    driver.execute_script("arguments[0].click();", submit_btn)
-                    print("Successfully clicked submit")
-                    
-                    # Wait for data table to load
-                    if not wait_for_data_table(driver):
-                        print("Failed to load data table")
-                        continue
-                    
-                    print("Waiting for export button...")
-                    # Wait for results and export button
-                    export_btn = WebDriverWait(driver, 30).until(
-                        EC.element_to_be_clickable((By.ID, "btnExport"))
-                    )
-                    time.sleep(2)  # Give the page a moment to fully load
-                    
-                    print("Clicking export button...")
-                    # Click export
-                    driver.execute_script("arguments[0].click();", export_btn)
-                    print("Successfully clicked export")
-                    
-                    # Wait for download
-                    print("Waiting for file download...")
-                    start_time = time.time()
-                    while time.time() - start_time < 30:
-                        if filepath.exists():
-                            time.sleep(2)  # Ensure download completes
-                            print(f"Successfully downloaded: {expected_filename}")
-                            downloaded_files.append(filepath)
-                            break
-                        time.sleep(1)
-                    
-                    if not filepath.exists():
-                        print(f"Failed to download: {expected_filename}")
-                    
-                    # Brief pause between downloads
-                    time.sleep(3)
-                    
-                except Exception as e:
-                    print(f"Error processing {year} {data_type}: {e}")
-                    continue
+                # Brief pause between downloads
+                time.sleep(2)
+    
+    except Exception as e:
+        print(f"Critical error in download process: {e}")
+    
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except Exception as e:
+                print(f"Error closing driver: {e}")
     
     return downloaded_files
 
