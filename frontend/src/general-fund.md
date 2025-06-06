@@ -8,6 +8,7 @@ The Massachusetts Department of Revenue's Division of Local Services maintains d
 
 ```js
 import {sankey, sankeyLinkHorizontal} from "npm:d3-sankey@0.12"
+import {SankeyChart} from "./components/sankey.js"
 ```
 
 The general fund data includes annual expenditures broken down into categories like:
@@ -200,122 +201,120 @@ const municipalityYearData = data.find(d =>
 ```
 
 ```js
+// Calculate totals and surplus/deficit outside of Sankey data prep
+let totalRevenue = 0;
+let totalExpenditures = 0;
+let surplus = 0;
+
+if (municipalityYearData) {
+  // Helper function to convert BigInt to Number
+  const convertValue = (value) => {
+    if (typeof value === 'bigint') return Number(value);
+    if (value === null || value === undefined) return 0;
+    return Number(value) || 0;
+  };
+
+  const revenueFields = Object.keys(municipalityYearData).filter(key => key.startsWith('rev_'));
+  const expenditureFields = Object.keys(municipalityYearData).filter(key => key.startsWith('exp_'));
+
+  const validRevenueFields = revenueFields.filter(field => convertValue(municipalityYearData[field]) > 0);
+  const validExpenditureFields = expenditureFields.filter(field => convertValue(municipalityYearData[field]) > 0);
+
+  totalRevenue = validRevenueFields.reduce((sum, field) => sum + convertValue(municipalityYearData[field]), 0);
+  totalExpenditures = validExpenditureFields.reduce((sum, field) => sum + convertValue(municipalityYearData[field]), 0);
+  surplus = totalRevenue - totalExpenditures;
+}
+```
+
+```js
 // Prepare Sankey data
-const revenueFields = Object.keys(municipalityYearData || {}).filter(key => key.startsWith('rev_'));
-const expenditureFields = Object.keys(municipalityYearData || {}).filter(key => key.startsWith('exp_'));
-
-// Helper function to convert BigInt to Number
-const convertValue = (value) => {
-  if (typeof value === 'bigint') {
-    return Number(value);
-  }
-  if (value === null || value === undefined) {
-    return 0;
-  }
-  return Number(value);
-};
-
-const totalRevenue = revenueFields.reduce((sum, field) => sum + convertValue(municipalityYearData?.[field] || 0), 0);
-const totalExpenditures = expenditureFields.reduce((sum, field) => sum + convertValue(municipalityYearData?.[field] || 0), 0);
-
-const surplus = totalRevenue - totalExpenditures;
-
 const sankeyData = {
   nodes: [],
   links: []
 };
 
 if (municipalityYearData) {
-  // Collect valid revenue and expenditure fields with data
+  // Helper function to convert BigInt to Number
+  const convertValue = (value) => {
+    if (typeof value === 'bigint') return Number(value);
+    if (value === null || value === undefined) return 0;
+    return Number(value) || 0;
+  };
+
+  const revenueFields = Object.keys(municipalityYearData).filter(key => key.startsWith('rev_'));
+  const expenditureFields = Object.keys(municipalityYearData).filter(key => key.startsWith('exp_'));
+
   const validRevenueFields = revenueFields.filter(field => convertValue(municipalityYearData[field]) > 0);
   const validExpenditureFields = expenditureFields.filter(field => convertValue(municipalityYearData[field]) > 0);
+
+  // 1. Define nodes
+  sankeyData.nodes.push({ id: "Total Revenue", category: "total" });
+  sankeyData.nodes.push({ id: "Total Expenditures", category: "total" });
   
-  // Add nodes
-  sankeyData.nodes.push(
-    { id: "Total Revenue", category: "total" },
-    { id: "Total Expenditures", category: "total" }
-  );
-  
-  // Add revenue source nodes (only for fields with values > 0)
   validRevenueFields.forEach(field => {
     const label = field.replace('rev_', '').replace(/_/g, ' ');
     sankeyData.nodes.push({ id: label, category: "revenue" });
   });
-  
-  // Add expenditure type nodes (only for fields with values > 0)
+
   validExpenditureFields.forEach(field => {
     const label = field.replace('exp_', '').replace(/_/g, ' ');
     sankeyData.nodes.push({ id: label, category: "expenditure" });
   });
-  
-  // Add surplus/deficit node if needed
-  if (Math.abs(surplus) > 1000) { // Only show if surplus/deficit is significant (> $1000)
-    if (surplus > 0) {
-      sankeyData.nodes.push({ id: "Budget Surplus", category: "surplus" });
-    } else {
-      sankeyData.nodes.push({ id: "Budget Deficit", category: "deficit" });
-    }
+
+  if (surplus > 0) {
+    sankeyData.nodes.push({ id: "Budget Surplus", category: "surplus" });
+  } else if (surplus < 0) {
+    sankeyData.nodes.push({ id: "Budget Deficit", category: "deficit" });
   }
-  
-  // Add links from revenue sources to Total Revenue (only for valid fields)
+
+  // 2. Define links based on the rules
+  // Rule 1: All revenue sources flow into Total Revenue
   validRevenueFields.forEach(field => {
-    const value = convertValue(municipalityYearData[field]);
     const label = field.replace('rev_', '').replace(/_/g, ' ');
     sankeyData.links.push({
       source: label,
       target: "Total Revenue",
-      value: value
+      value: convertValue(municipalityYearData[field])
     });
   });
-  
-  // Add links from Total Expenditures to expenditure types (only for valid fields)
+
+  // Rule 2: Flow from Total Revenue to Total Expenditures
+  const flowToExpenditures = Math.min(totalRevenue, totalExpenditures);
+  if (flowToExpenditures > 0) {
+    sankeyData.links.push({
+      source: "Total Revenue",
+      target: "Total Expenditures",
+      value: flowToExpenditures
+    });
+  }
+
+  // Rule 3: Handle surplus
+  if (surplus > 0) {
+    sankeyData.links.push({
+      source: "Total Revenue",
+      target: "Budget Surplus",
+      value: surplus
+    });
+  }
+
+  // Rule 4: Handle deficit
+  if (surplus < 0) {
+    sankeyData.links.push({
+      source: "Budget Deficit",
+      target: "Total Expenditures",
+      value: Math.abs(surplus)
+    });
+  }
+
+  // Rule 5: Flow from Total Expenditures to each expenditure type
   validExpenditureFields.forEach(field => {
-    const value = convertValue(municipalityYearData[field]);
     const label = field.replace('exp_', '').replace(/_/g, ' ');
     sankeyData.links.push({
       source: "Total Expenditures",
       target: label,
-      value: value
+      value: convertValue(municipalityYearData[field])
     });
   });
-  
-  // Handle surplus/deficit flow
-  if (Math.abs(surplus) > 1000) {
-    if (surplus > 0) {
-      // Surplus flows out of Total Revenue
-      sankeyData.links.push({
-        source: "Total Revenue",
-        target: "Budget Surplus",
-        value: surplus
-      });
-      // Total Revenue minus surplus flows to Total Expenditures
-      sankeyData.links.push({
-        source: "Total Revenue",
-        target: "Total Expenditures",
-        value: totalExpenditures
-      });
-    } else {
-      // Deficit flows into Total Expenditures
-      sankeyData.links.push({
-        source: "Budget Deficit",
-        target: "Total Expenditures",
-        value: Math.abs(surplus)
-      });
-      // All revenue flows to Total Expenditures
-      sankeyData.links.push({
-        source: "Total Revenue",
-        target: "Total Expenditures",
-        value: totalRevenue
-      });
-    }
-  } else {
-    // Balanced budget or very small difference
-    sankeyData.links.push({
-      source: "Total Revenue", 
-      target: "Total Expenditures",
-      value: Math.min(totalRevenue, totalExpenditures)
-    });
-  }
 }
 ```
 
@@ -353,85 +352,20 @@ if (municipalityYearData && sankeyData.nodes.length > 0) {
   console.log("Sankey Nodes:", sankeyData.nodes.map(n => n.id));
   console.log("Sankey Links:", sankeyData.links.map(l => `${l.source} -> ${l.target} (${l.value})`));
   
-  // Validate that all link sources and targets exist as nodes
-  const nodeIds = new Set(sankeyData.nodes.map(n => n.id));
-  const invalidLinks = sankeyData.links.filter(l => !nodeIds.has(l.source) || !nodeIds.has(l.target));
-  if (invalidLinks.length > 0) {
-    console.error("Invalid links found:", invalidLinks);
-  }
-
-  // Create a mapping from node ID to index
-  const nodeIndexMap = new Map();
-  sankeyData.nodes.forEach((node, index) => {
-    nodeIndexMap.set(node.id, index);
-  });
-
-  // Convert link sources and targets from strings to indices
-  const processedLinks = sankeyData.links.map(link => ({
-    source: nodeIndexMap.get(link.source),
-    target: nodeIndexMap.get(link.target),
-    value: link.value
-  }));
-
-  const sankeyGenerator = sankey()
-    .nodeWidth(15)
-    .nodePadding(10)
-    .extent([[1, 1], [1000 - 1, 600 - 1]]);
-
-  const graph = sankeyGenerator({
-    nodes: sankeyData.nodes.map(d => ({...d})),
-    links: processedLinks
-  });
-
-  display(Plot.plot({
-    width: 1000,
-    height: 600,
-    style: {
-      background: "white"
+  display(SankeyChart(
+    {
+      nodes: sankeyData.nodes,
+      links: sankeyData.links
     },
-    marks: [
-      // Links
-      Plot.link(graph.links, {
-        x1: d => d.source.x1,
-        y1: d => d.source.y0 + (d.source.y1 - d.source.y0) * (d.sy0 + d.sy1) / 2 / (d.source.y1 - d.source.y0),
-        x2: d => d.target.x0,
-        y2: d => d.target.y0 + (d.target.y1 - d.target.y0) * (d.ty0 + d.ty1) / 2 / (d.target.y1 - d.target.y0),
-        stroke: d => {
-          if (d.target.id === "Budget Surplus") return "#22c55e";
-          if (d.source.id === "Budget Deficit") return "#ef4444";
-          return "#94a3b8";
-        },
-        strokeWidth: d => Math.max(1, d.width),
-        strokeOpacity: 0.6,
-        curve: "bump-x"
-      }),
-      // Nodes
-      Plot.rect(graph.nodes, {
-        x1: d => d.x0,
-        x2: d => d.x1,
-        y1: d => d.y0,
-        y2: d => d.y1,
-        fill: d => {
-          if (d.category === "revenue") return "#3b82f6";
-          if (d.category === "expenditure") return "#f59e0b";
-          if (d.category === "total") return "#6b7280";
-          if (d.category === "surplus") return "#22c55e";
-          if (d.category === "deficit") return "#ef4444";
-          return "#94a3b8";
-        }
-      }),
-      // Labels
-      Plot.text(graph.nodes, {
-        x: d => d.x0 < 500 ? d.x1 + 6 : d.x0 - 6,
-        y: d => (d.y1 + d.y0) / 2,
-        text: d => d.id,
-        textAnchor: d => d.x0 < 500 ? "start" : "end",
-        fontSize: 12,
-        fill: "black"
-      })
-    ],
-    caption: `Budget flow for ${selectedMunicipalityForSankey}, Fiscal Year ${selectedYear}. Revenue sources (blue) flow into Total Revenue, which flows to Total Expenditures, which flows out to expenditure categories (orange). ${surplus >= 0 ? 'Budget surplus (green) flows out of Total Revenue.' : 'Budget deficit (red) flows into Total Expenditures.'}`
-  }));
+    {
+      width: 1000,
+      height: 600,
+      nodeGroup: d => d.category,
+      colors: ["#3b82f6", "#f59e0b", "#6b7280", "#22c55e", "#ef4444"],
+      linkColor: "source-target",
+      format: "~s"
+    }
+  ));
 } else if (!municipalityYearData) {
   display(html`<p style="color: #666; font-style: italic;">Please select a municipality and year to view the budget flow diagram.</p>`);
 }
