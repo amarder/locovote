@@ -11,7 +11,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select
 from selenium.common.exceptions import TimeoutException, WebDriverException, StaleElementReferenceException
 
-YEARS = range(2002, 2003)
+YEARS = range(2002, 2025)
 TYPES = ["revenues", "expenditures"]
 
 def setup_chrome(download_dir):
