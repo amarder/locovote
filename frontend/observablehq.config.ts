@@ -18,9 +18,9 @@ let currentDate: Date | null = null;
 
 function defaultFooter(): string {
   const date = currentDate ?? new Date();
-  return `Source code on <a href="https://github.com/amarder/locovote" target="_blank">GitHub</a>. Built on <a title="${formatIsoDate(
+  return `© ${date.getFullYear()} <a href="https://andrewmarder.net/" target="_blank">Andrew Marder</a>. Source code on <a href="https://github.com/amarder/locovote" target="_blank">GitHub</a>. Built on <a title="${formatIsoDate(
     date
-  )}">${formatLocaleDate(date)}</a> with <a href="https://observablehq.com/framework/" target="_blank">Observable Framework</a>. Hosted by <a href="https://www.netlify.com/" target="_blank">Netlify</a>.`;
+  )}">${formatLocaleDate(date)}</a> with <a href="https://observablehq.com/framework/" target="_blank">Observable Framework</a>.`;
 }
 
 // See https://observablehq.com/framework/config for documentation.
