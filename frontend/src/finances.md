@@ -24,7 +24,7 @@ const selected_municipality = municipalities.filter(obj => obj.Municipality === 
 ```js
 const levy_cols = ["Residential Levy", "Open Space Levy", "Commercial Levy", "Industrial Levy", "Personal Prop Levy"];
 const revenue_cols = ["State Aid", "Local Receipts", "Enterprise & CPA Funds", "Other Revenue"];
-const spending_cols = ["General Government", "Police", "Fire", "Other Public Safety", "Education", "Public Works", "Human Services", "Culture and Recreation", "Fixed Costs", "Intergovernmental Assessments", "Other Expenditures", "Debt Service"];
+const spending_cols = ["General Government", "Public Safety", "Education", "Public Works", "Human Services", "Culture and Recreation", "Fixed Costs", "Intergov Assessments", "Other Expenditures", "Debt Service"];
 
 const spending_data = spending_cols.map(key => ({key: key, value: selected_municipality[key]}));
 const rev_data = [...levy_cols, ...revenue_cols].map(key => ({key: key, value: selected_municipality[key]}))
@@ -37,7 +37,7 @@ function my_hist(title, data) {
       value: 100 * obj.value / sum
     }));
   }
-  const pop = selected_municipality["2021 Population"];
+  const pop = selected_municipality["2023 Population"];
   if (scale == "Per Capita") {
     data = data.map(obj => ({
       ...obj,
