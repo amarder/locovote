@@ -66,7 +66,7 @@ const municipalities = FileAttachment("./data/general-fund.arrow").arrow().then(
       return Number(value);
     };
     
-    return {
+    const processedData = {
       ...d,
       'Fiscal Year': convertValue(d['Fiscal Year']),
       ...Object.fromEntries(
@@ -75,6 +75,17 @@ const municipalities = FileAttachment("./data/general-fund.arrow").arrow().then(
         )
       )
     };
+    
+    // Calculate Budget Surplus
+    const revenueFields = Object.keys(processedData).filter(key => key.startsWith('rev_'));
+    const expenditureFields = Object.keys(processedData).filter(key => key.startsWith('exp_'));
+    
+    const totalRevenue = revenueFields.reduce((sum, field) => sum + convertValue(processedData[field]), 0);
+    const totalExpenditures = expenditureFields.reduce((sum, field) => sum + convertValue(processedData[field]), 0);
+    
+    processedData['Budget Surplus'] = totalRevenue - totalExpenditures;
+    
+    return processedData;
   })
 )
 ```
@@ -87,12 +98,18 @@ const towns = [...new Set((await municipalities).map(d => d.Municipality))];
 // Get all expenditure and revenue variables
 const data = await municipalities;
 const variables = Object.keys(data[0])
-  .filter(key => key.startsWith('exp_') || key.startsWith('rev_'))
+  .filter(key => key.startsWith('exp_') || key.startsWith('rev_') || key === 'Budget Surplus')
   .map(key => ({
     id: key,
-    label: key.replace('exp_', 'Expenditure: ').replace('rev_', 'Revenue: ')
+    label: key === 'Budget Surplus' ? 'Budget Surplus' : key.replace('exp_', 'Expenditure: ').replace('rev_', 'Revenue: ')
   }))
-  .sort((a, b) => a.label.localeCompare(b.label));
+  .sort((a, b) => {
+    // Put Budget Surplus at the end
+    if (a.id === 'Budget Surplus') return 1;
+    if (b.id === 'Budget Surplus') return -1;
+    // Sort all others alphabetically
+    return a.label.localeCompare(b.label);
+  });
 ```
 
 ```js
@@ -129,7 +146,6 @@ Plot.plot({
   y: {
     grid: true,
     label: selectedVariable.label,
-    domain: [0, d3.max(filteredMunicipalities, d => safeNumber(d[selectedVariable.id])) / 1_000_000],
     transform: d => safeNumber(d) / 1_000_000, // Convert to millions
     tickFormat: "~s"
   },
