@@ -93,11 +93,6 @@ export function SankeyChart({
         .attr("viewBox", [0, 0, width, height])
         .attr("style", "max-width: 100%; height: auto; height: intrinsic;");
   
-  svg.append("rect")
-      .attr("width", "100%")
-      .attr("height", "100%")
-      .attr("fill", "white");
-  
     const node = svg.append("g")
         .attr("stroke", nodeStroke)
         .attr("stroke-width", nodeStrokeWidth)
@@ -146,6 +141,7 @@ export function SankeyChart({
     if (Tl) svg.append("g")
         .attr("font-family", "sans-serif")
         .attr("font-size", 10)
+        .attr("fill", "var(--theme-foreground, currentColor)")
       .selectAll("text")
       .data(nodes)
       .join("text")
