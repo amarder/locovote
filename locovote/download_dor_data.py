@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Downloads Population data from MA DOR Population by Municipality and Year report."""
+"""Downloads data from MA DOR reports with similar structure."""
 
 import time
 from pathlib import Path
@@ -80,10 +80,8 @@ def wait_for_page_stability(driver, timeout=10):
         print(f"Warning: Page stability check failed: {e}")
         return False
 
-def load_page_with_retries(driver, max_attempts=3):
-    """Load the main population page with retry logic."""
-    url = "https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=Socioeconomic.Population.Population&rdScrollX=0&rdScrollY=0"
-    
+def load_page_with_retries(driver, url, max_attempts=3):
+    """Load the specified page with retry logic."""
     for attempt in range(max_attempts):
         try:
             print(f"Loading page (attempt {attempt + 1}/{max_attempts})")
@@ -253,8 +251,10 @@ def wait_for_data_table(driver, timeout=45):
         
         # Wait for any data table to be present - try multiple possible selectors
         table_selectors = [
-            "//table[contains(@id, 'tblPopulation')]",  # Most likely based on the pattern
+            "//table[contains(@id, 'tblPopulation')]",  # Population table
+            "//table[contains(@id, 'tblTaxlevybyclass')]",  # Tax levy table
             "//table[contains(@id, 'Population')]",
+            "//table[contains(@id, 'Taxlevy')]",
             "//table[contains(@class, 'data')]",
             "//div[contains(@class, 'table')]//table",
             "//table//tr[position()>1]",  # Table with data rows
@@ -347,30 +347,42 @@ def click_export_table_button(driver, timeout=30, max_retries=2):
     
     return False
 
-def download_population_data(download_dir=Path("./downloads"), force_download=False):
-    """Download Population data from MA DOR Population by Municipality and Year report.
+def download_dor_data(url, output_path, download_dir=None, force_download=False):
+    """Download data from MA DOR reports with similar structure.
+    
+    Args:
+        url: URL of the DOR report page
+        output_path: Path where the downloaded file should be saved
+        download_dir: Directory to use for downloading (defaults to output_path parent)
+        force_download: Whether to download even if output file already exists
     
     Returns:
         Path: Path to the downloaded file, or None if download failed
     """
-    download_dir.mkdir(exist_ok=True)
-    expected_filename = "population_data.xlsx"  # We'll need to see what the actual filename is
-    filepath = download_dir / expected_filename
+    output_path = Path(output_path)
+    
+    # Use output path's parent directory as download directory if not specified
+    if download_dir is None:
+        download_dir = output_path.parent
+    else:
+        download_dir = Path(download_dir)
+    
+    download_dir.mkdir(parents=True, exist_ok=True)
     
     # Check if file already exists
-    if filepath.exists() and not force_download:
-        print(f"Found existing file: {expected_filename}")
-        return filepath
+    if output_path.exists() and not force_download:
+        print(f"Found existing file: {output_path}")
+        return output_path
     
     driver = None
     try:
-        print("Starting population data download...")
+        print(f"Starting data download from: {url}")
         
         # Create driver
         driver = setup_chrome(download_dir)
         
         # Load the page
-        if not load_page_with_retries(driver):
+        if not load_page_with_retries(driver, url):
             raise Exception("Failed to load page")
         
         # Select all fiscal years
@@ -395,26 +407,24 @@ def download_population_data(download_dir=Path("./downloads"), force_download=Fa
         while time.time() - start_time < 60:  # 60 second timeout
             # Check for any new files in download directory
             xlsx_files = list(download_dir.glob("*.xlsx"))
-            print(f"Found {len(xlsx_files)} Excel files in download directory")
             
             if xlsx_files:
-                # Look for common population data filenames first
-                population_files = [f for f in xlsx_files if 'population' in f.name.lower()]
-                if population_files:
-                    latest_file = max(population_files, key=lambda f: f.stat().st_mtime)
-                    print(f"Found population file: {latest_file.name}")
-                    time.sleep(3)  # Ensure download completes
-                    print(f"Successfully downloaded: {latest_file.name}")
-                    return latest_file
-                
-                # If no population-specific file, find the most recently modified file
+                # Find the most recently modified file
                 latest_file = max(xlsx_files, key=lambda f: f.stat().st_mtime)
                 # Make timestamp check less restrictive (allow files created up to 10 seconds before start)
                 if latest_file.stat().st_mtime > (start_time - 10):
                     print(f"Found recent file: {latest_file.name}, modified at {latest_file.stat().st_mtime}")
                     time.sleep(3)  # Ensure download completes
-                    print(f"Successfully downloaded: {latest_file.name}")
-                    return latest_file
+                    
+                    # Move/rename the file to the desired output path
+                    if latest_file != output_path:
+                        if output_path.exists():
+                            output_path.unlink()  # Remove existing file
+                        latest_file.rename(output_path)
+                        print(f"File renamed to: {output_path}")
+                    
+                    print(f"Successfully downloaded: {output_path}")
+                    return output_path
                 else:
                     print(f"File {latest_file.name} is too old (modified at {latest_file.stat().st_mtime}, start time: {start_time})")
             time.sleep(1)
@@ -422,7 +432,7 @@ def download_population_data(download_dir=Path("./downloads"), force_download=Fa
         raise Exception("Download timeout: No file was downloaded")
         
     except Exception as e:
-        print(f"Error downloading population data: {e}")
+        print(f"Error downloading data: {e}")
         return None
     
     finally:
@@ -434,9 +444,42 @@ def download_population_data(download_dir=Path("./downloads"), force_download=Fa
             except Exception as e:
                 print(f"Error closing driver: {e}")
 
+def download_population_data(download_dir=Path("./downloads"), force_download=False):
+    """Download Population data from MA DOR Population by Municipality and Year report.
+    
+    This is a convenience function that calls the generic download_dor_data function
+    with the population data URL.
+    
+    Returns:
+        Path: Path to the downloaded file, or None if download failed
+    """
+    url = "https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=Socioeconomic.Population.Population&rdScrollX=0&rdScrollY=0"
+    output_path = download_dir / "population_data.xlsx"
+    return download_dor_data(url, output_path, download_dir, force_download)
+
+def download_tax_levies_data(download_dir=Path("./downloads"), force_download=False):
+    """Download Tax Levies by Class data from MA DOR report.
+    
+    Returns:
+        Path: Path to the downloaded file, or None if download failed
+    """
+    url = "https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=PropertyTaxInformation.TaxLevies.LeviesByClass&rdSubReport=True&rdResizeFrame=True"
+    output_path = download_dir / "tax_levies_data.xlsx"
+    return download_dor_data(url, output_path, download_dir, force_download)
+
 if __name__ == "__main__":
-    result = download_population_data()
-    if result:
-        print(f"Population data downloaded successfully to: {result}")
+    # Example usage
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "tax_levies":
+        result = download_tax_levies_data()
+        if result:
+            print(f"Tax levies data downloaded successfully to: {result}")
+        else:
+            print("Failed to download tax levies data")
     else:
-        print("Failed to download population data")
+        result = download_population_data()
+        if result:
+            print(f"Population data downloaded successfully to: {result}")
+        else:
+            print("Failed to download population data")
