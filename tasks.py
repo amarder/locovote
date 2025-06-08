@@ -6,6 +6,7 @@ import platform
 from locovote.mcas import download_mcas_data
 from locovote.mass_gov_div_local_services import download_tables as download_financial_data
 from locovote.general_fund import download_general_fund_data
+from locovote.download_population import download_population_data
 from locovote.mcas_parquet import clean_mcas
 from locovote.finances import clean_dor_data
 from locovote.clean_general_fund import main as clean_general_fund
@@ -110,6 +111,21 @@ def clean_dor_general_fund(c):
         print(f"File {output_path} already exists. Skipping cleaning.")
     else:
         clean_general_fund()
+
+@task
+def download_population(c):
+    """Download Massachusetts population data from DOR."""
+    print("Downloading population data...")
+    target = RAW_DIR / "population.xlsx"
+    if target.exists():
+        print(f"Population data already downloaded: {target}")
+        return
+    downloaded_file = download_population_data(download_dir=RAW_DIR)
+    
+    if downloaded_file:
+        print(f"Population data downloaded successfully to: {downloaded_file}")
+    else:
+        print("Failed to download population data")
 
 @task(clean_mcas_data, clean_finance_data, clean_dor_general_fund)
 def clean_data(c):
