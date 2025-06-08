@@ -38,7 +38,7 @@ And revenue sources including:
 
 This data allows us to analyze spending patterns and revenue sources across Massachusetts cities and towns over time. Select a variable and municipalities below to explore the trends.
 
-## Expenditure and Revenue Trends
+## Time Trends
 
 ```js
 // Global helper function to safely convert BigInt to Number
@@ -450,3 +450,4 @@ if (municipalityYearData && sankeyData.nodes.length > 0) {
 } else if (!municipalityYearData) {
   display(html`<p style="color: #666; font-style: italic;">Please select a municipality and year to view the budget flow diagram.</p>`);
 }
+```
