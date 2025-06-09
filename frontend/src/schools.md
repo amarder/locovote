@@ -4,6 +4,14 @@ title: Schools
 
 # Schools
 
+<div class="tip" label="Key Questions">
+
+- How well do schools in my community perform academically?
+- What percentage of students meet or exceed state standards on MCAS tests?
+- How do different schools and districts compare over time?
+
+</div>
+
 ```js
 import SQLite from "npm:@observablehq/sqlite";
 
@@ -16,7 +24,7 @@ const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_
 
 ```
 
-Select schools or districts in the table below to view their standardized test results.
+Select one or more schools or districts from the table below to explore their MCAS performance data. You can search by name and compare multiple institutions side-by-side.
 
 ```js
 const search = view(Inputs.search(schools));
@@ -28,7 +36,7 @@ const search = view(Inputs.search(schools));
 const my_table = Inputs.table(search, {
     required: false,
     multiple: true,
-    value: search.slice(0, 1),
+    value: search.slice(9, 10),
     columns: ["district", "school", "pct_e", "pct_me", "is_district"],
     header: {"district": "District", "school": "Name", "pct_e": "Exceeding (%)", "pct_me": "Meeting or Exceeding (%)", "is_district": "Type"},
     format: {pct_e: (x) => x.toFixed(1), pct_me: (x) => x.toFixed(1), is_district: (x) => x ? "District" : "School"}
@@ -87,10 +95,18 @@ const my_plot = Plot.plot({
 });
 return my_plot;
 }
-return "Select a row in the table above to see the corresponding data.";
+return "Select schools or districts from the table above to visualize their performance trends and compare results.";
 }
 ```
 
 <div class="card">${make_plot()}</div>
 
-Data comes from the [Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/Next-Generation-MCAS-Achievement-Results/i9w6-niyt/about_data).
+---
+
+## About the Data
+
+Test results are from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program. Data is provided by the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
+
+**Understanding the Metrics:**
+- **Exceeding Expectations:** Students demonstrate comprehensive understanding and skills beyond grade-level standards
+- **Meeting or Exceeding Expectations:** Students meet or surpass the minimum proficiency standards for their grade level
