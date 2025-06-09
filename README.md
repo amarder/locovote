@@ -21,5 +21,12 @@ Observable Framework has support for [data loaders](https://observablehq.com/fra
 
 Pieces of data I want:
 
-- **account for inflation**
-- residential property tax rates
+- **account for inflation** https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=Socioeconomic.consumer.consumerpriceindex&rdSubReport=True&rdResizeFrame=True
+
+
+Implicit Price Deflator and Consumer Price Index  
+Division of Local Services
+
+Measures of Inflation on goods and services (US Bureau of Labor Statistics)
+
+- residential property tax rates: tax rates by class: https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=PropertyTaxInformation.taxratesbyclass.taxratesbyclass&rdSubReport=True&rdResizeFrame=True
