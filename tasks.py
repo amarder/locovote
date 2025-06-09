@@ -6,11 +6,12 @@ import platform
 from locovote.mcas import download_mcas_data
 from locovote.mass_gov_div_local_services import download_tables as download_financial_data
 from locovote.general_fund import download_general_fund_data
-from locovote.download_population import download_population_data
+from locovote.download_dor_data import download_population_data, download_tax_levies_data
 from locovote.mcas_parquet import clean_mcas
 from locovote.finances import clean_dor_data
 from locovote.clean_general_fund import main as clean_general_fund
 from locovote.clean_population import clean_population_data
+from locovote.clean_tax_levies import clean_tax_levies_data
 
 DATA_DIR = Path("./data")
 RAW_DIR = DATA_DIR / "raw"
@@ -139,7 +140,33 @@ def clean_population_data_task(c):
         input_path = RAW_DIR / "population.xlsx"
         clean_population_data(input_path=input_path, output_path=output_path)
 
-@task(clean_mcas_data, clean_finance_data, clean_dor_general_fund, clean_population_data_task)
+@task
+def download_tax_levies(c):
+    """Download Massachusetts tax levies by class data from DOR."""
+    print("Downloading tax levies data...")
+    target = RAW_DIR / "tax_levies_data.xlsx"
+    if target.exists():
+        print(f"Tax levies data already downloaded: {target}")
+        return
+    downloaded_file = download_tax_levies_data(download_dir=RAW_DIR)
+    
+    if downloaded_file:
+        print(f"Tax levies data downloaded successfully to: {downloaded_file}")
+    else:
+        print("Failed to download tax levies data")
+
+@task(download_tax_levies)
+def clean_tax_levies_data_task(c):
+    """Clean and process Massachusetts tax levies data."""
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = PROCESSED_DIR / "tax-levies.arrow"
+    if output_path.exists():
+        print(f"File {output_path} already exists. Skipping cleaning.")
+    else:
+        input_path = RAW_DIR / "tax_levies_data.xlsx"
+        clean_tax_levies_data(input_path=input_path, output_path=output_path)
+
+@task(clean_mcas_data, clean_finance_data, clean_dor_general_fund, clean_population_data_task, clean_tax_levies_data_task)
 def clean_data(c):
     """Run all data cleaning tasks in the correct order."""
     pass
