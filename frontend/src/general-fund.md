@@ -1,184 +1,28 @@
 ---
-title: General Fund
+title: Revenues and Expenditures
 ---
-
-# General Fund
-
-The Massachusetts Department of Revenue's Division of Local Services maintains detailed financial data for all municipalities in the state through Schedule A reports. These reports track both revenues and expenditures across major categories in each municipality's general fund.
 
 ```js
 import {sankey, sankeyLinkHorizontal} from "npm:d3-sankey@0.12"
 import {SankeyChart} from "./components/sankey.js"
 ```
 
-The general fund data includes annual expenditures broken down into categories like:
-- General Government
-- Public Safety
-- Education 
-- Public Works
-- Human Services
-- Culture and Recreation
-- Fixed Costs
-- Intergov Assessments
-- Other Expenditures
-- Debt Service
+# Revenues and Expenditures
 
-And revenue sources including:
-- Taxes
-- Service Charges 
-- Licenses and Permits
-- Federal Revenue
-- State Revenue
-- Revenue from Other Governments
-- Special Assessments
-- Fines and Forfeitures
-- Miscellaneous
-- Other Financing Sources
-- Transfers
+<div class="tip" label="Key Questions">
 
-This data allows us to analyze spending patterns and revenue sources across Massachusetts cities and towns over time. Select a variable and municipalities below to explore the trends.
+- What does my town spend money on and where does the funding come from?
+- Does the town balance its budget or run a surplus/deficit?
+- How have spending patterns and revenue sources evolved over time?
+- How does my town compare to neighboring communities?
 
-## Time Trends
+</div>
 
-```js
-// Global helper function to safely convert BigInt to Number
-const safeNumber = (value) => {
-  if (typeof value === 'bigint') {
-    return Number(value);
-  }
-  if (value === null || value === undefined) {
-    return 0;
-  }
-  return Number(value) || 0;
-};
-```
+This page explores municipal finances by examining how Massachusetts cities and towns generate revenue and allocate spending through their general funds. The general fund represents the primary operating budget that covers most day-to-day municipal services and is controlled through the normal town meeting or city council appropriation process.
 
-```js
-const municipalities = FileAttachment("./data/general-fund.arrow").arrow().then(data => 
-  Array.from(data).map(d => {
-    const convertValue = (value) => {
-      if (typeof value === 'bigint') {
-        return Number(value);
-      }
-      if (value === null || value === undefined) {
-        return 0;
-      }
-      return Number(value);
-    };
-    
-    const processedData = {
-      ...d,
-      'Fiscal Year': convertValue(d['Fiscal Year']),
-      ...Object.fromEntries(
-        Object.entries(d).map(([key, value]) => 
-          key.startsWith('exp_') || key.startsWith('rev_') ? [key, convertValue(value)] : [key, value]
-        )
-      )
-    };
-    
-    // Calculate Budget Surplus
-    const revenueFields = Object.keys(processedData).filter(key => key.startsWith('rev_'));
-    const expenditureFields = Object.keys(processedData).filter(key => key.startsWith('exp_'));
-    
-    const totalRevenue = revenueFields.reduce((sum, field) => sum + convertValue(processedData[field]), 0);
-    const totalExpenditures = expenditureFields.reduce((sum, field) => sum + convertValue(processedData[field]), 0);
-    
-    processedData['Budget Surplus'] = totalRevenue - totalExpenditures;
-    
-    return processedData;
-  })
-)
-```
+## Money Flows
 
-```js
-const towns = [...new Set((await municipalities).map(d => d.Municipality))];
-```
-
-```js
-// Get all expenditure and revenue variables
-const data = await municipalities;
-const variables = Object.keys(data[0])
-  .filter(key => key.startsWith('exp_') || key.startsWith('rev_') || key === 'Budget Surplus')
-  .map(key => ({
-    id: key,
-    label: key === 'Budget Surplus' ? 'Budget Surplus' : key.replace('exp_', 'Expenditure: ').replace('rev_', 'Revenue: ')
-  }))
-  .sort((a, b) => {
-    // Put Budget Surplus at the end
-    if (a.id === 'Budget Surplus') return 1;
-    if (b.id === 'Budget Surplus') return -1;
-    // Sort all others alphabetically
-    return a.label.localeCompare(b.label);
-  });
-```
-
-```js
-const selectedVariable = view(Inputs.select(
-  variables,
-  {
-    label: "Select Variable",
-    value: variables.find(v => v.id === 'exp_Education'),
-    format: v => v.label
-  }
-))
-```
-
-```js
-const selectedMunicipalities = view(Inputs.select(
-  towns, 
-  {
-    label: "Select Municipalities", 
-    multiple: true, 
-    value: ["Weston", "Wayland"],
-    sort: true
-  }
-))
-```
-
-```js
-const filteredMunicipalities = data.filter(d => selectedMunicipalities.includes(d.Municipality));
-```
-
-```js
-Plot.plot({
-  width: 1000,
-  height: 600,
-  y: {
-    grid: true,
-    label: selectedVariable.label,
-    transform: d => safeNumber(d) / 1_000_000, // Convert to millions
-    tickFormat: "~s"
-  },
-  x: {
-    label: "Fiscal Year",
-    tickFormat: d => d.toString()
-  },
-  marks: [
-    Plot.line(filteredMunicipalities, {
-      x: "Fiscal Year",
-      y: d => safeNumber(d[selectedVariable.id]),
-      stroke: "Municipality",
-      strokeWidth: 1.5
-    }),
-    Plot.dot(filteredMunicipalities, {
-      x: "Fiscal Year",
-      y: d => safeNumber(d[selectedVariable.id]),
-      stroke: "Municipality",
-      fill: "white",
-      tip: true,
-      title: d => `${d.Municipality}
-Fiscal Year: ${d['Fiscal Year']}
-${selectedVariable.label}: $${(safeNumber(d[selectedVariable.id]) / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`
-    })
-  ],
-  color: {
-    legend: true
-  },
-  caption: `${selectedVariable.label} by municipality over time (in millions of dollars)`
-})
-```
-
-## Budget Surplus / Deficit
+The diagram below visualizes how money flows through a municipality's general fund. Revenue sources (like taxes, state aid, and fees) flow into the total revenue pool, which then funds various expenditure categories (such as education, public safety, and infrastructure). When revenues exceed expenditures, the municipality runs a budget surplus; when expenditures exceed revenues, it runs a deficit.
 
 ```js
 const selectedMunicipalityForSankey = view(Inputs.select(
@@ -451,3 +295,173 @@ if (municipalityYearData && sankeyData.nodes.length > 0) {
   display(html`<p style="color: #666; font-style: italic;">Please select a municipality and year to view the budget flow diagram.</p>`);
 }
 ```
+
+## Time Trends
+
+Track how municipal finances have changed over time by exploring trends in specific revenue sources or expenditure categories. This analysis helps identify patterns such as growing education costs, changes in state funding, or the impact of economic cycles on local budgets. You can compare multiple municipalities to see how similar communities manage their finances differently.
+
+```js
+// Global helper function to safely convert BigInt to Number
+const safeNumber = (value) => {
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  return Number(value) || 0;
+};
+```
+
+```js
+const municipalities = FileAttachment("./data/general-fund.arrow").arrow().then(data => 
+  Array.from(data).map(d => {
+    const convertValue = (value) => {
+      if (typeof value === 'bigint') {
+        return Number(value);
+      }
+      if (value === null || value === undefined) {
+        return 0;
+      }
+      return Number(value);
+    };
+    
+    const processedData = {
+      ...d,
+      'Fiscal Year': convertValue(d['Fiscal Year']),
+      ...Object.fromEntries(
+        Object.entries(d).map(([key, value]) => 
+          key.startsWith('exp_') || key.startsWith('rev_') ? [key, convertValue(value)] : [key, value]
+        )
+      )
+    };
+    
+    // Calculate Budget Surplus
+    const revenueFields = Object.keys(processedData).filter(key => key.startsWith('rev_'));
+    const expenditureFields = Object.keys(processedData).filter(key => key.startsWith('exp_'));
+    
+    const totalRevenue = revenueFields.reduce((sum, field) => sum + convertValue(processedData[field]), 0);
+    const totalExpenditures = expenditureFields.reduce((sum, field) => sum + convertValue(processedData[field]), 0);
+    
+    processedData['Budget Surplus'] = totalRevenue - totalExpenditures;
+    
+    return processedData;
+  })
+)
+```
+
+```js
+const towns = [...new Set((await municipalities).map(d => d.Municipality))];
+```
+
+```js
+// Get all expenditure and revenue variables
+const data = await municipalities;
+const variables = Object.keys(data[0])
+  .filter(key => key.startsWith('exp_') || key.startsWith('rev_') || key === 'Budget Surplus')
+  .map(key => ({
+    id: key,
+    label: key === 'Budget Surplus' ? 'Budget Surplus' : key.replace('exp_', 'Expenditure: ').replace('rev_', 'Revenue: ')
+  }))
+  .sort((a, b) => {
+    // Put Budget Surplus at the end
+    if (a.id === 'Budget Surplus') return 1;
+    if (b.id === 'Budget Surplus') return -1;
+    // Sort all others alphabetically
+    return a.label.localeCompare(b.label);
+  });
+```
+
+```js
+const selectedVariable = view(Inputs.select(
+  variables,
+  {
+    label: "Select Variable",
+    value: variables.find(v => v.id === 'exp_Education'),
+    format: v => v.label
+  }
+))
+```
+
+```js
+const selectedMunicipalities = view(Inputs.select(
+  towns, 
+  {
+    label: "Select Municipalities", 
+    multiple: true, 
+    value: ["Weston", "Wayland"],
+    sort: true
+  }
+))
+```
+
+```js
+const filteredMunicipalities = data.filter(d => selectedMunicipalities.includes(d.Municipality));
+```
+
+```js
+Plot.plot({
+  width: 1000,
+  height: 600,
+  y: {
+    grid: true,
+    label: selectedVariable.label,
+    transform: d => safeNumber(d) / 1_000_000, // Convert to millions
+    tickFormat: "~s"
+  },
+  x: {
+    label: "Fiscal Year",
+    tickFormat: d => d.toString()
+  },
+  marks: [
+    Plot.line(filteredMunicipalities, {
+      x: "Fiscal Year",
+      y: d => safeNumber(d[selectedVariable.id]),
+      stroke: "Municipality",
+      strokeWidth: 1.5
+    }),
+    Plot.dot(filteredMunicipalities, {
+      x: "Fiscal Year",
+      y: d => safeNumber(d[selectedVariable.id]),
+      stroke: "Municipality",
+      fill: "white",
+      tip: true,
+      title: d => `${d.Municipality}
+Fiscal Year: ${d['Fiscal Year']}
+${selectedVariable.label}: $${(safeNumber(d[selectedVariable.id]) / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`
+    })
+  ],
+  color: {
+    legend: true
+  },
+  caption: `${selectedVariable.label} by municipality over time (in millions of dollars)`
+})
+```
+
+## About the Data
+
+All financial data presented here comes from the Massachusetts Department of Revenue's Division of Local Services through their [General Fund Report](https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=ScheduleA.GeneralFund). This report provides standardized financial information for all Massachusetts municipalities, ensuring consistent and comparable data across communities.
+
+### Understanding General Fund Finances
+
+The general fund represents a municipality's primary operating budget and accounts for most financial resources and activities governed by the normal town meeting or city council appropriation process. This includes:
+
+**Common Revenue Sources:**
+- Property taxes (typically the largest source)
+- State aid and grants
+- Local receipts (fees, permits, fines)
+- Motor vehicle excise taxes
+- Investment income
+
+**Major Expenditure Categories:**
+- Education
+- Public safety (police, fire, emergency services)
+- Public works (roads, maintenance, utilities)
+- General government (administration, town clerk, assessor)
+- Health and human services
+- Culture and recreation
+- Debt service
+
+### Data Limitations
+
+The general fund data excludes some municipal activities that are tracked in separate funds, such as water and sewer enterprises, capital projects, and certain grant-funded programs. For a complete picture of municipal finances, these other funds would need to be considered alongside general fund data. See the broader category of [Schedule A Reports](https://www.mass.gov/lists/schedule-a-reports-revenues-expenditures-and-more).

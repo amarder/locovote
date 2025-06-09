@@ -2,7 +2,17 @@
 title: Population
 ---
 
-# Time Trend
+# Population
+
+<div class="tip" label="Key Questions">
+
+- How many people live in my town?
+- How has this evolved over time?
+- How does my town compare to neighboring communities?
+
+</div>
+
+## Time Trends
 
 ```js
 const data = FileAttachment("./data/population.arrow").arrow()
@@ -77,3 +87,13 @@ Plot.plot({
   ]
 })
 ```
+
+## About the Data
+
+This population data is sourced from the Massachusetts Department of Revenue's Division of Local Services, which reports official population estimates based on US Census Bureau data. These estimates provide a reliable foundation for understanding demographic trends across Massachusetts municipalities.
+
+The interactive chart above allows you to compare population changes over time across different communities, helping you identify growth patterns, demographic shifts, and how your town compares to its neighbors.
+
+**Data Source:** [Massachusetts DOR Division of Local Services](https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=Socioeconomic.Population.Population&rdSubReport=True)
+
+For additional socioeconomic data and context, visit the [Massachusetts Socioeconomic Data portal](https://www.mass.gov/info-details/socioeconomic-data).
