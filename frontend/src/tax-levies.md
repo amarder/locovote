@@ -2,7 +2,31 @@
 title: Tax Levies by Class
 ---
 
-# Tax Levy Breakdown by Type
+# Tax Levies by Class
+
+Understanding how Massachusetts municipalities generate property tax revenue across different property classes provides crucial insight into local fiscal health and economic composition.
+
+<div class="tip" label="Key Questions">
+
+- How does the tax burden distribute between residential and commercial properties?
+- Which municipalities rely more heavily on business taxes versus residential taxes?
+- How have these patterns changed over time?
+
+</div>
+
+## What Are Tax Levy Classes?
+
+Massachusetts property tax law divides all taxable property into five distinct classes, each with its own tax rate:
+
+- **Residential Levy**: Single-family homes, condominiums, and small apartment buildings (up to 3 units)
+- **Commercial Levy**: Office buildings, retail stores, restaurants, hotels, and other business properties
+- **Industrial Levy**: Manufacturing facilities, warehouses, and industrial complexes
+- **Personal Property Levy**: Business equipment, machinery, and other movable business assets
+- **Open Space Levy**: Land designated for recreational, conservation, or agricultural use
+
+## How to Use This Tool
+
+Select one or more municipalities from the dropdown to compare their tax composition. Choose different levy types to see how each contributes to the total tax revenue over time. The chart shows each levy type as a percentage of the municipality's total property tax levy, helping you understand the relative importance of different property classes.
 
 ```js
 const data = FileAttachment("./data/tax-levies.arrow").arrow()
@@ -122,3 +146,11 @@ Plot.plot({
   ]
 })
 ```
+
+## About the Data
+
+This analysis uses official tax levy data from the Massachusetts Division of Local Services (DLS), which tracks property tax information for all 351 cities and towns in the Commonwealth. The data shows how much tax revenue each municipality collects from different property classes, providing insight into local economic composition and fiscal strategies.
+
+**Data Source**: [Massachusetts Division of Local services Tax Levies by Class Report](https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=PropertyTaxInformation.TaxLevies.LeviesByClass&rdSubReport=True&rdResizeFrame=True)
+
+**Additional Resources**: Explore all [Division of Local Services Databank Reports](https://www.mass.gov/collections/DLS-databank-reports) for comprehensive municipal finance data.
