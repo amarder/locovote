@@ -7,12 +7,12 @@ title: Population
 <div class="tip" label="Key Questions">
 
 - How many people live in my town?
-
 - How has this evolved over time?
-
 - How does my town compare to neighboring communities?
 
 </div>
+
+## Time Trends
 
 ```js
 const data = FileAttachment("./data/population.arrow").arrow()
@@ -88,7 +88,7 @@ Plot.plot({
 })
 ```
 
-### About the Data
+## About the Data
 
 This population data is sourced from the Massachusetts Department of Revenue's Division of Local Services, which reports official population estimates based on US Census Bureau data. These estimates provide a reliable foundation for understanding demographic trends across Massachusetts municipalities.
 

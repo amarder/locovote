@@ -12,11 +12,8 @@ import {SankeyChart} from "./components/sankey.js"
 <div class="tip" label="Key Questions">
 
 - What does my town spend money on and where does the funding come from?
-
 - Does the town balance its budget or run a surplus/deficit?
-
 - How have spending patterns and revenue sources evolved over time?
-
 - How does my town compare to neighboring communities?
 
 </div>

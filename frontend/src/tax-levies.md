@@ -14,7 +14,7 @@ Understanding how Massachusetts municipalities generate property tax revenue acr
 
 </div>
 
-## What Are Tax Levy Classes?
+### What Are Tax Levy Classes?
 
 Massachusetts property tax law divides all taxable property into five distinct classes, each with its own tax rate:
 
@@ -24,7 +24,7 @@ Massachusetts property tax law divides all taxable property into five distinct c
 - **Personal Property Levy**: Business equipment, machinery, and other movable business assets
 - **Open Space Levy**: Land designated for recreational, conservation, or agricultural use
 
-## How to Use This Tool
+## Time Trends
 
 Select one or more municipalities from the dropdown to compare their tax composition. Choose different levy types to see how each contributes to the total tax revenue over time. The chart shows each levy type as a percentage of the municipality's total property tax levy, helping you understand the relative importance of different property classes.
 
