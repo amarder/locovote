@@ -11,6 +11,7 @@ from locovote.mcas_parquet import clean_mcas
 from locovote.finances import clean_dor_data
 from locovote.clean_general_fund import main as clean_general_fund
 from locovote.clean_population import clean_population_data
+from locovote.clean_tax_levies import clean_tax_levies_data
 
 DATA_DIR = Path("./data")
 RAW_DIR = DATA_DIR / "raw"
@@ -154,7 +155,18 @@ def download_tax_levies(c):
     else:
         print("Failed to download tax levies data")
 
-@task(clean_mcas_data, clean_finance_data, clean_dor_general_fund, clean_population_data_task)
+@task(download_tax_levies)
+def clean_tax_levies_data_task(c):
+    """Clean and process Massachusetts tax levies data."""
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = PROCESSED_DIR / "tax-levies.arrow"
+    if output_path.exists():
+        print(f"File {output_path} already exists. Skipping cleaning.")
+    else:
+        input_path = RAW_DIR / "tax_levies_data.xlsx"
+        clean_tax_levies_data(input_path=input_path, output_path=output_path)
+
+@task(clean_mcas_data, clean_finance_data, clean_dor_general_fund, clean_population_data_task, clean_tax_levies_data_task)
 def clean_data(c):
     """Run all data cleaning tasks in the correct order."""
     pass
