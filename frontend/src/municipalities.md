@@ -76,6 +76,8 @@ const snapshotData = municipalityData.find(d =>
 ## Snapshot
 
 ```js
+display(snapshotData);
+
 // Helper function to safely convert values
 const convertValue = (value) => {
   if (typeof value === 'bigint') return Number(value);
@@ -116,9 +118,18 @@ const nodeCategoryMap = {};
 if (snapshotData && totalRevenue > 0) {
   const revenueFields = Object.keys(snapshotData).filter(key => key.startsWith('gf_rev_'));
   const expenditureFields = Object.keys(snapshotData).filter(key => key.startsWith('gf_exp_'));
+  const levyFields = Object.keys(snapshotData).filter(key => key.startsWith('levy_'));
 
-  const validRevenueFields = revenueFields.filter(field => convertValue(snapshotData[field]) > 0);
   const validExpenditureFields = expenditureFields.filter(field => convertValue(snapshotData[field]) > 0);
+  const validLevyFields = levyFields.filter(field => convertValue(snapshotData[field]) > 0);
+  
+  // If we have detailed levy data, exclude gf_rev_Taxes to avoid double-counting
+  const validRevenueFields = revenueFields.filter(field => {
+    if (validLevyFields.length > 0 && field === 'gf_rev_Taxes') {
+      return false; // Skip gf_rev_Taxes when we have detailed levy breakdown
+    }
+    return convertValue(snapshotData[field]) > 0;
+  });
 
   // 1. Define nodes and populate category map
   sankeyData.nodes.push({ id: "Total Revenue", category: "total" });
@@ -127,11 +138,33 @@ if (snapshotData && totalRevenue > 0) {
   sankeyData.nodes.push({ id: "Total Expenditures", category: "total" });
   nodeCategoryMap["Total Expenditures"] = "total";
   
+  // Add Taxes node if we have levy data
+  if (validLevyFields.length > 0) {
+    sankeyData.nodes.push({ id: "Taxes", category: "taxes" });
+    nodeCategoryMap["Taxes"] = "taxes";
+  }
+  
   validRevenueFields.forEach(field => {
     const label = field.replace('gf_rev_', '').replace(/_/g, ' ');
     sankeyData.nodes.push({ id: label, category: "revenue" });
     nodeCategoryMap[label] = "revenue";
   });
+
+  validLevyFields.forEach(field => {
+    const label = field.replace('levy_', '').replace(/_/g, ' ');
+    sankeyData.nodes.push({ id: label, category: "levy" });
+    nodeCategoryMap[label] = "levy";
+  });
+
+  // Add "Other Taxes" node if there's a difference between gf_rev_Taxes and levy sum
+  const totalLevies = validLevyFields.reduce((sum, field) => sum + convertValue(snapshotData[field]), 0);
+  const gfRevTaxes = convertValue(snapshotData['gf_rev_Taxes']) || 0;
+  const otherTaxes = gfRevTaxes - totalLevies;
+  
+  if (validLevyFields.length > 0 && otherTaxes > 0) {
+    sankeyData.nodes.push({ id: "Other Taxes", category: "levy" });
+    nodeCategoryMap["Other Taxes"] = "levy";
+  }
 
   validExpenditureFields.forEach(field => {
     const label = field.replace('gf_exp_', '').replace(/_/g, ' ');
@@ -148,7 +181,39 @@ if (snapshotData && totalRevenue > 0) {
   }
 
   // 2. Define links
-  // All revenue sources flow into Total Revenue
+  // Levy sources flow into Taxes
+  validLevyFields.forEach(field => {
+    const label = field.replace('levy_', '').replace(/_/g, ' ');
+    sankeyData.links.push({
+      source: label,
+      target: "Taxes",
+      value: convertValue(snapshotData[field])
+    });
+  });
+
+  // Other Taxes flow into Taxes (if there's a difference)
+  if (validLevyFields.length > 0 && otherTaxes > 0) {
+    sankeyData.links.push({
+      source: "Other Taxes",
+      target: "Taxes",
+      value: otherTaxes
+    });
+  }
+
+  // Taxes flows into Total Revenue
+  if (validLevyFields.length > 0) {
+    // Use gf_rev_Taxes total to ensure accuracy
+    const totalTaxesToRevenue = convertValue(snapshotData['gf_rev_Taxes']) || 0;
+    if (totalTaxesToRevenue > 0) {
+      sankeyData.links.push({
+        source: "Taxes",
+        target: "Total Revenue",
+        value: totalTaxesToRevenue
+      });
+    }
+  }
+
+  // Other revenue sources flow directly into Total Revenue
   validRevenueFields.forEach(field => {
     const label = field.replace('gf_rev_', '').replace(/_/g, ' ');
     sankeyData.links.push({
@@ -271,10 +336,12 @@ if (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) {
         };
         
         const categoryOrder = {
+          'levy': 0.5,
+          'taxes': 1.5,
           'revenue': 1,
           'total': 2,
           'expenditure': 3,
-          'deficit': 1.5,
+          'deficit': 1.2,
           'surplus': 3.5
         };
         
@@ -295,8 +362,8 @@ if (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) {
         
         return 0;
       },
-      colors: ["#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
-      linkColor: "source-target",
+      colors: ["#6366f1", "#6366f1", "#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
+      linkColor: "#6366f1",
       format: "~s"
     }
   ));
@@ -367,11 +434,4 @@ Plot.plot({
     })
   ]
 })
-```
-
----
-
-```js
-// Display the filtered data in a table
-Inputs.table(filteredData)
 ```
