@@ -6,9 +6,7 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ### The Merge
 
-Merge all data about municipalities together, make a municipality snapshot page that shows all the data.
-
-**Sankey Diagram**
+**Make the municipality page look good.**
 
 ### School Snapshot
 

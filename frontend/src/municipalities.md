@@ -22,8 +22,11 @@ const municipalities = [...new Set(municipalityData.map(d => d.Municipality))].s
 ```
 
 ```js
-// Get unique fiscal years for the dropdown
-const fiscalYears = [...new Set(municipalityData.map(d => Number(d["Fiscal Year"])))].sort((a, b) => b - a)
+// Get unique fiscal years for the dropdown (only years with tax revenue data)
+const fiscalYears = [...new Set(municipalityData
+  .filter(d => d.gf_rev_Taxes != null && d.gf_rev_Taxes !== 0)
+  .map(d => Number(d["Fiscal Year"]))
+)].sort((a, b) => b - a)
 ```
 
 ```js
@@ -73,11 +76,7 @@ const snapshotData = municipalityData.find(d =>
 )
 ```
 
-## Snapshot
-
 ```js
-display(snapshotData);
-
 // Helper function to safely convert values
 const convertValue = (value) => {
   if (typeof value === 'bigint') return Number(value);
@@ -300,82 +299,86 @@ if (snapshotData && totalRevenue > 0) {
 ```js
 // Sankey diagram
 if (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) {
-  display(SankeyChart(
-    {
-      nodes: sankeyData.nodes,
-      links: sankeyData.links
-    },
-    {
-      width: 800,
-      height: 500,
-      nodeGroup: d => d.category,
-      nodeSort: (a, b) => {
-        // Custom sorting logic
-        const getNodeValue = (node) => {
-          let value = 0;
-          const nodeCategory = nodeCategoryMap[node.id];
-          
-          if (nodeCategory === 'revenue') {
-            value = sankeyData.links
-              .filter(link => link.source === node.id)
-              .reduce((sum, link) => sum + link.value, 0);
-          } else if (nodeCategory === 'expenditure') {
-            value = sankeyData.links
-              .filter(link => link.target === node.id)
-              .reduce((sum, link) => sum + link.value, 0);
-          } else {
-            const incomingValue = sankeyData.links
-              .filter(link => link.target === node.id)
-              .reduce((sum, link) => sum + link.value, 0);
-            const outgoingValue = sankeyData.links
-              .filter(link => link.source === node.id)
-              .reduce((sum, link) => sum + link.value, 0);
-            value = Math.max(incomingValue, outgoingValue);
-          }
-          return value;
-        };
-        
-        const categoryOrder = {
-          'levy': 0.5,
-          'taxes': 1.5,
-          'revenue': 1,
-          'total': 2,
-          'expenditure': 3,
-          'deficit': 1.2,
-          'surplus': 3.5
-        };
-        
-        const aCategory = nodeCategoryMap[a.id];
-        const bCategory = nodeCategoryMap[b.id];
-        const aOrder = categoryOrder[aCategory] || 2;
-        const bOrder = categoryOrder[bCategory] || 2;
-        
-        if (aOrder !== bOrder) {
-          return aOrder - bOrder;
-        }
-        
-        if (aCategory === bCategory && (aCategory === 'revenue' || aCategory === 'expenditure')) {
-          const aValue = getNodeValue(a);
-          const bValue = getNodeValue(b);
-          return bValue - aValue;
-        }
-        
-        return 0;
+  display(html`<div class="card">
+    ${SankeyChart(
+      {
+        nodes: sankeyData.nodes,
+        links: sankeyData.links
       },
-      colors: ["#6366f1", "#6366f1", "#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
-      linkColor: "#6366f1",
-      format: "~s"
-    }
-  ));
+      {
+        width: 830,
+        height: 500,
+        nodeGroup: d => d.category,
+        nodeSort: (a, b) => {
+          // Custom sorting logic
+          const getNodeValue = (node) => {
+            let value = 0;
+            const nodeCategory = nodeCategoryMap[node.id];
+            
+            if (nodeCategory === 'revenue') {
+              value = sankeyData.links
+                .filter(link => link.source === node.id)
+                .reduce((sum, link) => sum + link.value, 0);
+            } else if (nodeCategory === 'expenditure') {
+              value = sankeyData.links
+                .filter(link => link.target === node.id)
+                .reduce((sum, link) => sum + link.value, 0);
+            } else {
+              const incomingValue = sankeyData.links
+                .filter(link => link.target === node.id)
+                .reduce((sum, link) => sum + link.value, 0);
+              const outgoingValue = sankeyData.links
+                .filter(link => link.source === node.id)
+                .reduce((sum, link) => sum + link.value, 0);
+              value = Math.max(incomingValue, outgoingValue);
+            }
+            return value;
+          };
+          
+          const categoryOrder = {
+            'levy': 0.5,
+            'taxes': 1.5,
+            'revenue': 1,
+            'total': 2,
+            'expenditure': 3,
+            'deficit': 1.2,
+            'surplus': 3.5
+          };
+          
+          const aCategory = nodeCategoryMap[a.id];
+          const bCategory = nodeCategoryMap[b.id];
+          const aOrder = categoryOrder[aCategory] || 2;
+          const bOrder = categoryOrder[bCategory] || 2;
+          
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
+          
+          if (aCategory === bCategory && (aCategory === 'revenue' || aCategory === 'expenditure')) {
+            const aValue = getNodeValue(a);
+            const bValue = getNodeValue(b);
+            return bValue - aValue;
+          }
+          
+          return 0;
+        },
+        colors: ["#6366f1", "#6366f1", "#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
+        linkColor: "#6366f1",
+        format: "~s"
+      }
+    )}
+  </div>`);
 }
 ```
 
-## Time Trends
+---
 
 ```js
 // Create population trend chart
-Plot.plot({
-  title: `Population Trend for ${selectedMunicipality}`,
+html`<div class="card">
+${Plot.plot({
+  title: `${selectedMunicipality}: Population Over Time`,
+  width: 830,
   x: {
     label: "Year",
     type: "linear",
@@ -401,13 +404,16 @@ Plot.plot({
       title: d => `${d["Fiscal Year"]}: ${d.pop_Population?.toLocaleString() || 'N/A'}`
     })
   ]
-})
+})}
+</div>`
 ```
 
 ```js
 // Create residential tax rate trend chart
-Plot.plot({
-  title: `Residential Tax Rate Trend for ${selectedMunicipality}`,
+html`<div class="card">
+${Plot.plot({
+  title: `${selectedMunicipality}: Residential Tax Rate Over Time`,
+  width: 830,
   x: {
     label: "Fiscal Year",
     type: "linear",
@@ -433,5 +439,6 @@ Plot.plot({
       title: d => `${d["Fiscal Year"]}: $${d.rate_Residential?.toFixed(2) || 'N/A'}`
     })
   ]
-})
+})}
+</div>`
 ```
