@@ -12,20 +12,47 @@ const municipalityData = [...data];
 ```
 
 ```js
-display(municipalityData);
-```
-
-```js
 // Get unique municipalities for the dropdown
 const municipalities = [...new Set(municipalityData.map(d => d.Municipality))].sort()
 ```
 
 ```js
-// Create dropdown input for municipality selection
+// Get unique fiscal years for the dropdown
+const fiscalYears = [...new Set(municipalityData.map(d => Number(d["Fiscal Year"])))].sort((a, b) => b - a)
+```
+
+```js
+// Read URL parameters for initial values
+const urlParams = new URL(location).searchParams;
+const initialMunicipality = urlParams.get("name") || "Boston";
+const initialFiscalYear = parseInt(urlParams.get("year")) || fiscalYears[0];
+```
+
+```js
+// Create municipality input with URL sync
 const selectedMunicipality = view(Inputs.select(municipalities, {
   label: "Select Municipality:",
-  value: "Boston"
+  value: municipalities.includes(initialMunicipality) ? initialMunicipality : "Boston"
 }))
+```
+
+```js
+// Create fiscal year input with URL sync
+const selectedFiscalYear = view(Inputs.select(fiscalYears, {
+  label: "Select Fiscal Year:",
+  value: fiscalYears.includes(initialFiscalYear) ? initialFiscalYear : fiscalYears[0],
+  format: d => d.toString()
+}))
+```
+
+```js
+// Update URL when inputs change
+{
+  const url = new URL(location);
+  url.searchParams.set("name", selectedMunicipality);
+  url.searchParams.set("year", selectedFiscalYear);
+  history.replaceState(null, "", url);
+}
 ```
 
 ```js
@@ -33,12 +60,9 @@ const selectedMunicipality = view(Inputs.select(municipalities, {
 const filteredData = municipalityData.filter(d => d.Municipality === selectedMunicipality)
 ```
 
-```js
-// Display the filtered data in a table
-Inputs.table(filteredData)
-```
+## Snapshot
 
-## Population
+## Time Trends
 
 ```js
 // Create population trend chart
@@ -72,8 +96,6 @@ Plot.plot({
 })
 ```
 
-## Residential Tax Rate
-
 ```js
 // Create residential tax rate trend chart
 Plot.plot({
@@ -106,5 +128,9 @@ Plot.plot({
 })
 ```
 
+---
 
-
+```js
+// Display the filtered data in a table
+Inputs.table(filteredData)
+```
