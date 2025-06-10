@@ -300,15 +300,17 @@ if (snapshotData && totalRevenue > 0) {
 // Sankey diagram
 if (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) {
   display(html`<div class="card">
-    ${SankeyChart(
-      {
-        nodes: sankeyData.nodes,
-        links: sankeyData.links
-      },
-      {
-        width: 830,
-        height: 500,
-        nodeGroup: d => d.category,
+    <figure style="max-width: initial;">
+      <h2>${selectedMunicipality} ${selectedFiscalYear}: Revenues and Expenditures</h2>
+      ${SankeyChart(
+        {
+          nodes: sankeyData.nodes,
+          links: sankeyData.links
+        },
+        {
+          width: 830,
+          height: 500,
+          nodeGroup: d => d.category,
         nodeSort: (a, b) => {
           // Custom sorting logic
           const getNodeValue = (node) => {
@@ -364,9 +366,10 @@ if (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) {
         },
         colors: ["#6366f1", "#6366f1", "#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
         linkColor: "#6366f1",
-        format: "~s"
-      }
-    )}
+                  format: "~s"
+        }
+      )}
+    </figure>
   </div>`);
 }
 ```
@@ -417,8 +420,8 @@ ${Plot.plot({
   x: {
     label: "Fiscal Year",
     type: "linear",
-    tickFormat: d => d.toString(),
-    domain: d3.extent(filteredData.filter(d => d.rate_Residential != null), d => d["Fiscal Year"])
+    tickFormat: d => d.toString()
+    // domain: d3.extent(filteredData.filter(d => d.rate_Residential != null), d => d["Fiscal Year"])
   },
   y: {
     label: "Residential Tax Rate",

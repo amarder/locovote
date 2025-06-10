@@ -4,9 +4,11 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ## Tasks
 
-### The Merge
+### Municipalities Page
 
-**Make the municipality page look good.**
+Add ability to browse other time trends.
+
+Per-capita numbers would be nice
 
 ### School Snapshot
 
