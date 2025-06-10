@@ -13,7 +13,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException, Sta
 def setup_chrome(download_dir):
     """Configure Chrome for headless download."""
     options = Options()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--window-size=1920,1080")
     
@@ -251,10 +251,13 @@ def wait_for_data_table(driver, timeout=45):
         
         # Wait for any data table to be present - try multiple possible selectors
         table_selectors = [
+            "//table[contains(@id, 'tbl_taxratesbyclass')]",  # Tax rates table
             "//table[contains(@id, 'tblPopulation')]",  # Population table
             "//table[contains(@id, 'tblTaxlevybyclass')]",  # Tax levy table
             "//table[contains(@id, 'Population')]",
             "//table[contains(@id, 'Taxlevy')]",
+            "//table[contains(@id, 'taxrates')]",  # Generic tax rates
+            "//table[contains(@class, 'rdThemeDataTable')]",  # The specific class used by DOR tables
             "//table[contains(@class, 'data')]",
             "//div[contains(@class, 'table')]//table",
             "//table//tr[position()>1]",  # Table with data rows
@@ -467,6 +470,16 @@ def download_tax_levies_data(download_dir=Path("./downloads"), force_download=Fa
     output_path = download_dir / "tax_levies_data.xlsx"
     return download_dor_data(url, output_path, download_dir, force_download)
 
+def download_tax_rates_data(download_dir=Path("./downloads"), force_download=False):
+    """Download Tax Rates by Class data from MA DOR report.
+    
+    Returns:
+        Path: Path to the downloaded file, or None if download failed
+    """
+    url = "https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=PropertyTaxInformation.taxratesbyclass.taxratesbyclass&rdSubReport=True&rdResizeFrame=True"
+    output_path = download_dir / "tax_rates_data.xlsx"
+    return download_dor_data(url, output_path, download_dir, force_download)
+
 if __name__ == "__main__":
     # Example usage
     import sys
@@ -477,6 +490,12 @@ if __name__ == "__main__":
             print(f"Tax levies data downloaded successfully to: {result}")
         else:
             print("Failed to download tax levies data")
+    elif len(sys.argv) > 1 and sys.argv[1] == "tax_rates":
+        result = download_tax_rates_data()
+        if result:
+            print(f"Tax rates data downloaded successfully to: {result}")
+        else:
+            print("Failed to download tax rates data")
     else:
         result = download_population_data()
         if result:
