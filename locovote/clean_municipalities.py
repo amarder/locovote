@@ -91,8 +91,141 @@ def examine_arrow_file(file_path):
         print(f"ERROR reading {file_path}: {e}")
         return None
 
+def merge_all_datasets():
+    """Merge all datasets together with appropriate prefixes"""
+    
+    # Define paths
+    data_dir = Path('../data/processed')
+    output_file = '../data/processed/municipalities.arrow'
+    
+    print(f"Loading and merging datasets...")
+    
+    # Load each dataset
+    general_fund_df = pd.read_feather(data_dir / 'combined_general_fund.arrow')
+    population_df = pd.read_feather(data_dir / 'population.arrow')
+    tax_rates_df = pd.read_feather(data_dir / 'tax-rates.arrow')
+    tax_levies_df = pd.read_feather(data_dir / 'tax-levies.arrow')
+    
+    print(f"Loaded datasets:")
+    print(f"  General fund: {general_fund_df.shape}")
+    print(f"  Population: {population_df.shape}")
+    print(f"  Tax rates: {tax_rates_df.shape}")
+    print(f"  Tax levies: {tax_levies_df.shape}")
+    
+    # 1. Rename "Year" to "Fiscal Year" in population data
+    population_df = population_df.rename(columns={'Year': 'Fiscal Year'})
+    print(f"✓ Renamed 'Year' to 'Fiscal Year' in population data")
+    
+    # 2. Add prefixes to columns (excluding merge keys)
+    merge_keys = ['DOR Code', 'Municipality', 'Fiscal Year']
+    
+    # General fund: add gf_ prefix (and drop source file columns)
+    general_fund_df = general_fund_df.drop(columns=['source_file_exp', 'source_file_rev'], errors='ignore')
+    gf_columns = {col: f'gf_{col}' for col in general_fund_df.columns if col not in merge_keys}
+    general_fund_df = general_fund_df.rename(columns=gf_columns)
+    
+    # Population: add pop_ prefix
+    pop_columns = {col: f'pop_{col}' for col in population_df.columns if col not in merge_keys}
+    population_df = population_df.rename(columns=pop_columns)
+    
+    # Tax rates: add rate_ prefix
+    rate_columns = {col: f'rate_{col}' for col in tax_rates_df.columns if col not in merge_keys}
+    tax_rates_df = tax_rates_df.rename(columns=rate_columns)
+    
+    # Tax levies: add levy_ prefix
+    levy_columns = {col: f'levy_{col}' for col in tax_levies_df.columns if col not in merge_keys}
+    tax_levies_df = tax_levies_df.rename(columns=levy_columns)
+    
+    print(f"✓ Added prefixes to all datasets")
+    
+    # 3. Check for the mystery 352nd municipality
+    print(f"\nInvestigating municipality differences:")
+    gf_munis = set(general_fund_df['Municipality'].unique())
+    pop_munis = set(population_df['Municipality'].unique())
+    rate_munis = set(tax_rates_df['Municipality'].unique())
+    levy_munis = set(tax_levies_df['Municipality'].unique())
+    
+    print(f"  General fund: {len(gf_munis)} municipalities")
+    print(f"  Population: {len(pop_munis)} municipalities")
+    print(f"  Tax rates: {len(rate_munis)} municipalities")  
+    print(f"  Tax levies: {len(levy_munis)} municipalities")
+    
+    # Find municipalities that exist in some datasets but not others
+    all_munis = gf_munis | pop_munis | rate_munis | levy_munis
+    
+    missing_from_gf = all_munis - gf_munis
+    missing_from_pop = all_munis - pop_munis
+    missing_from_rates = all_munis - rate_munis
+    missing_from_levies = all_munis - levy_munis
+    
+    if missing_from_gf:
+        print(f"  Missing from general fund: {missing_from_gf}")
+    if missing_from_pop:
+        print(f"  Missing from population: {missing_from_pop}")
+    if missing_from_rates:
+        print(f"  Missing from tax rates: {missing_from_rates}")
+    if missing_from_levies:
+        print(f"  Missing from tax levies: {missing_from_levies}")
+    
+    # 4. Merge all datasets using outer joins
+    print(f"\nMerging datasets...")
+    
+    # Start with general fund as base
+    merged_df = general_fund_df.copy()
+    print(f"  Starting with general fund: {merged_df.shape}")
+    
+    # Merge with population
+    merged_df = pd.merge(merged_df, population_df, on=merge_keys, how='outer')
+    print(f"  After adding population: {merged_df.shape}")
+    
+    # Merge with tax rates
+    merged_df = pd.merge(merged_df, tax_rates_df, on=merge_keys, how='outer')
+    print(f"  After adding tax rates: {merged_df.shape}")
+    
+    # Merge with tax levies
+    merged_df = pd.merge(merged_df, tax_levies_df, on=merge_keys, how='outer')
+    print(f"  After adding tax levies: {merged_df.shape}")
+    
+    # 5. Clean up and sort
+    merged_df = merged_df.sort_values(['Municipality', 'Fiscal Year'])
+    
+    # 6. Summary of merged data
+    print(f"\n{'='*80}")
+    print(f"MERGED DATASET SUMMARY")
+    print(f"{'='*80}")
+    print(f"Final shape: {merged_df.shape}")
+    print(f"Municipalities: {merged_df['Municipality'].nunique()}")
+    print(f"Year range: {merged_df['Fiscal Year'].min():.0f} - {merged_df['Fiscal Year'].max():.0f}")
+    
+    # Check data coverage by dataset
+    print(f"\nData coverage by source:")
+    gf_coverage = merged_df['gf_exp_Education'].notna().sum()
+    pop_coverage = merged_df['pop_Population'].notna().sum()
+    rate_coverage = merged_df['rate_Residential'].notna().sum()
+    levy_coverage = merged_df['levy_Residential Levy'].notna().sum()
+    
+    print(f"  General fund data: {gf_coverage:,} rows ({gf_coverage/len(merged_df)*100:.1f}%)")
+    print(f"  Population data: {pop_coverage:,} rows ({pop_coverage/len(merged_df)*100:.1f}%)")
+    print(f"  Tax rate data: {rate_coverage:,} rows ({rate_coverage/len(merged_df)*100:.1f}%)")
+    print(f"  Tax levy data: {levy_coverage:,} rows ({levy_coverage/len(merged_df)*100:.1f}%)")
+    
+    # Show missing data summary
+    print(f"\nMissing data summary:")
+    missing_data = merged_df.isnull().sum()
+    missing_data = missing_data[missing_data > 0].sort_values(ascending=False)
+    for col, missing_count in missing_data.head(10).items():
+        pct_missing = (missing_count / len(merged_df)) * 100
+        print(f"  {col:30s}: {missing_count:,} ({pct_missing:.1f}%)")
+    
+    # 7. Save merged dataset
+    print(f"\nSaving merged dataset to {output_file}...")
+    merged_df.to_feather(output_file, compression="uncompressed")
+    
+    print(f"✓ Merged dataset saved successfully!")
+    return merged_df
+
 def main():
-    """Main function to examine all arrow files in ../data/processed"""
+    """Main function to examine all arrow files and merge them"""
     
     # Define the data directory
     data_dir = Path('../data/processed')
@@ -153,6 +286,20 @@ def main():
                 for col in sorted(unique_to_files):
                     files_with_col = [name for name, df in dataframes.items() if col in df.columns]
                     print(f"  - {col}: {files_with_col}")
+    
+    # Now merge all the datasets
+    print(f"\n{'='*80}")
+    print(f"MERGING ALL DATASETS")
+    print(f"{'='*80}")
+    
+    merged_df = merge_all_datasets()
+    
+    # Show sample of merged data
+    if merged_df is not None:
+        print(f"\nSample of merged data:")
+        sample_cols = ['Municipality', 'Fiscal Year', 'pop_Population', 'gf_exp_Education', 'rate_Residential', 'levy_Residential Levy']
+        available_cols = [col for col in sample_cols if col in merged_df.columns]
+        print(merged_df[available_cols].head(10).to_string(index=False))
 
 if __name__ == "__main__":
     main() 
