@@ -35,6 +35,7 @@ export default {
     {name: "Schools", path: "/schools"},
     {name: "Revenues and Expenditures", path: "/general-fund"},
     {name: "Tax Levies by Class", path: "/tax-levies"},
+    {name: "Tax Rates by Class", path: "/tax-rates"},
     {name: "Population", path: "/population"}
   ],
 
