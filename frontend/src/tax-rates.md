@@ -2,10 +2,7 @@
 title: Tax Rates by Class
 ---
 
-
 # Tax Rates by Class
-
-Understanding how Massachusetts municipalities set property tax rates across different property classes provides crucial insight into local fiscal policy and the relative tax burden on different types of properties.
 
 <div class="tip" label="Key Questions">
 
@@ -14,19 +11,19 @@ Understanding how Massachusetts municipalities set property tax rates across dif
 
 </div>
 
-### What Are Tax Rate Classes?
+## About Tax Rate Classes
 
 Massachusetts property tax law divides all taxable property into five distinct classes, each with its own tax rate:
 
-- **Residential Rate**: Single-family homes, condominiums, and small apartment buildings (up to 3 units)
-- **Commercial Rate**: Office buildings, retail stores, restaurants, hotels, and other business properties
-- **Industrial Rate**: Manufacturing facilities, warehouses, and industrial complexes
-- **Personal Property Rate**: Business equipment, machinery, and other movable business assets
-- **Open Space Rate**: Land designated for recreational, conservation, or agricultural use
+- **Residential**: Single-family homes, condominiums, and small apartment buildings (up to 3 units)
+- **Commercial**: Office buildings, retail stores, restaurants, hotels, and other business properties
+- **Industrial**: Manufacturing facilities, warehouses, and industrial complexes
+- **Personal Property**: Business equipment, machinery, and other movable business assets
+- **Open Space**: Land designated for recreational, conservation, or agricultural use
 
 ## Time Trends
 
-Select one or more municipalities and a tax rate type to compare how rates have changed over time. The chart shows the selected rate type for your chosen municipalities, making it easy to compare trends.
+Compare tax rates across municipalities over time by selecting locations and a property class below. The interactive chart helps visualize how different communities set their tax rates and how these rates have changed through the years.
 
 ```js
 const data = FileAttachment("./data/tax-rates.arrow").arrow()
@@ -74,7 +71,7 @@ const selectedRateType = view(
   Inputs.select(
     rateTypes,
     {
-      label: "Select rate type:",
+      label: "Select property class:",
       value: "Residential"
     }
   )
@@ -134,8 +131,8 @@ Plot.plot({
 
 ## About the Data
 
-This analysis uses official tax rate data from the Massachusetts Division of Local Services (DLS), which tracks property tax rates for all 351 cities and towns in the Commonwealth. Tax rates are expressed as dollars per $1,000 of assessed value, showing how much property owners pay in taxes for each $1,000 their property is worth.
+This analysis uses official tax rate data from the Massachusetts Division of Local Services (DLS), which tracks property tax rates for all 351 cities and towns across the Commonwealth. 
+
+Tax rates are expressed as dollars per $1,000 of assessed value—showing exactly how much property owners pay in taxes for each $1,000 their property is worth according to municipal assessments.
 
 **Data Source**: [Massachusetts Division of Local Services Tax Rates by Class Report](https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=PropertyTaxInformation.taxratesbyclass.taxratesbyclass&rdSubReport=True&rdResizeFrame=True)
-
-**Additional Resources**: Explore all [Division of Local Services Databank Reports](https://www.mass.gov/collections/DLS-databank-reports) for comprehensive municipal finance data.
