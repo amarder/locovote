@@ -45,7 +45,7 @@ Inputs.table(filteredData)
 Plot.plot({
   title: `Population Trend for ${selectedMunicipality}`,
   x: {
-    label: "Fiscal Year",
+    label: "Year",
     type: "linear",
     tickFormat: d => d.toString()
   },
@@ -71,4 +71,40 @@ Plot.plot({
   ]
 })
 ```
+
+## Residential Tax Rate
+
+```js
+// Create residential tax rate trend chart
+Plot.plot({
+  title: `Residential Tax Rate Trend for ${selectedMunicipality}`,
+  x: {
+    label: "Fiscal Year",
+    type: "linear",
+    tickFormat: d => d.toString(),
+    domain: d3.extent(filteredData.filter(d => d.rate_Residential != null), d => d["Fiscal Year"])
+  },
+  y: {
+    label: "Residential Tax Rate",
+    grid: true
+  },
+  marks: [
+    Plot.line(filteredData, {
+      x: "Fiscal Year",
+      y: "rate_Residential",
+      stroke: "darkgreen",
+      strokeWidth: 2
+    }),
+    Plot.dot(filteredData, {
+      x: "Fiscal Year", 
+      y: "rate_Residential",
+      fill: "darkgreen",
+      r: 4,
+      title: d => `${d["Fiscal Year"]}: $${d.rate_Residential?.toFixed(2) || 'N/A'}`
+    })
+  ]
+})
+```
+
+
 
