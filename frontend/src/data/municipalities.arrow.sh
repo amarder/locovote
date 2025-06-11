@@ -1,1 +1,1 @@
-cat ../data/processed/municipalities.arrow
+curl -L -f https://github.com/amarder/locovote/releases/download/v0.1.1/municipalities.arrow
