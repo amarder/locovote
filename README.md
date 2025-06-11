@@ -8,8 +8,6 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 Add ability to browse other time trends.
 
-Per-capita numbers would be nice
-
 ### School Snapshot
 
 Modify schools page to focus on one school at a time, put school name in the URL so people can send out links.

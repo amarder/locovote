@@ -22,10 +22,11 @@ const municipalities = [...new Set(municipalityData.map(d => d.Municipality))].s
 ```
 
 ```js
-// Get unique fiscal years for the dropdown (only years with tax revenue data)
+// Get unique fiscal years for the dropdown (only years with tax revenue data, 2003-2024)
 const fiscalYears = [...new Set(municipalityData
   .filter(d => d.gf_rev_Taxes != null && d.gf_rev_Taxes !== 0)
   .map(d => Number(d["Fiscal Year"]))
+  .filter(year => year >= 2003 && year <= 2024)
 )].sort((a, b) => b - a)
 ```
 
@@ -64,8 +65,12 @@ const selectedFiscalYear = view(Inputs.select(fiscalYears, {
 ```
 
 ```js
-// Filter data based on selected municipality
-const filteredData = municipalityData.filter(d => d.Municipality === selectedMunicipality)
+// Filter data based on selected municipality and year range (2003-2024)
+const filteredData = municipalityData.filter(d => 
+  d.Municipality === selectedMunicipality && 
+  Number(d["Fiscal Year"]) >= 2003 && 
+  Number(d["Fiscal Year"]) <= 2024
+)
 ```
 
 ```js
@@ -74,6 +79,8 @@ const snapshotData = municipalityData.find(d =>
   d.Municipality === selectedMunicipality && 
   Number(d["Fiscal Year"]) === selectedFiscalYear
 )
+
+display(snapshotData)
 ```
 
 ```js
@@ -412,36 +419,236 @@ ${Plot.plot({
 ```
 
 ```js
-// Create residential tax rate trend chart
+// Prepare tax rate data for multi-line chart
+const taxRateData = filteredData.flatMap(d => {
+  const rateTypes = [
+    { field: 'rate_Residential', label: 'Residential' },
+    { field: 'rate_Commercial', label: 'Commercial' },
+    { field: 'rate_Industrial', label: 'Industrial' },
+    { field: 'rate_Personal Property', label: 'Personal Property' },
+    { field: 'rate_Open Space', label: 'Open Space' }
+  ];
+  
+  return rateTypes
+    .filter(rate => d[rate.field] != null) // Include all rates as long as they're not null, even if 0
+    .map(rate => ({
+      "Fiscal Year": d["Fiscal Year"],
+      "Rate Type": rate.label,
+      "Tax Rate": d[rate.field]
+    }));
+});
+```
+
+```js
+// Check if municipality uses uniform tax rates
+const hasUniformRates = taxRateData.length > 0 && (() => {
+  const ratesByYear = {};
+  taxRateData.forEach(d => {
+    if (!ratesByYear[d["Fiscal Year"]]) ratesByYear[d["Fiscal Year"]] = new Set();
+    ratesByYear[d["Fiscal Year"]].add(d["Tax Rate"]);
+  });
+  return Object.values(ratesByYear).every(rates => rates.size === 1);
+})();
+```
+
+```js
+// Create tax rates trend chart using facets for each property class
 html`<div class="card">
 ${Plot.plot({
-  title: `${selectedMunicipality}: Residential Tax Rate Over Time`,
+  title: `${selectedMunicipality}: Tax Rates by Property Class Over Time`,
   width: 830,
+  height: 400,
   x: {
     label: "Fiscal Year",
     type: "linear",
     tickFormat: d => d.toString()
-    // domain: d3.extent(filteredData.filter(d => d.rate_Residential != null), d => d["Fiscal Year"])
   },
   y: {
-    label: "Residential Tax Rate",
+    label: "Tax Rate (per $1,000 assessed value)",
     grid: true
   },
+  fx: {
+    label: "Property Class",
+    domain: [...new Set(taxRateData.map(d => d["Rate Type"]))].sort()
+  },
   marks: [
-    Plot.line(filteredData, {
+    Plot.line(taxRateData, {
       x: "Fiscal Year",
-      y: "rate_Residential",
-      stroke: "darkgreen",
+      y: "Tax Rate",
+      fx: "Rate Type",
+      stroke: "steelblue",
       strokeWidth: 2
     }),
-    Plot.dot(filteredData, {
+    Plot.dot(taxRateData, {
       x: "Fiscal Year", 
-      y: "rate_Residential",
-      fill: "darkgreen",
-      r: 4,
-      title: d => `${d["Fiscal Year"]}: $${d.rate_Residential?.toFixed(2) || 'N/A'}`
+      y: "Tax Rate",
+      fx: "Rate Type",
+      fill: "steelblue",
+      r: 2.5,
+      title: d => `${d["Rate Type"]}\n${d["Fiscal Year"]}: $${d["Tax Rate"]?.toFixed(2) || 'N/A'} per $1,000`
     })
   ]
 })}
+${hasUniformRates ? 
+  html`<p style="margin-top: 10px; font-style: italic; color: #666;">
+    <strong>Note:</strong> This municipality uses uniform tax rates across all property classes.
+  </p>` : 
+  html``
+}
+</div>`
+```
+
+```js
+// Prepare data for stacked charts
+const revenueFields = Object.keys(municipalityData[0])
+  .filter(key => key.startsWith('gf_rev_') && key !== 'gf_rev_Taxes') // Exclude Taxes, we'll handle it separately
+  .map(key => ({
+    id: key,
+    label: key.replace('gf_rev_', '').replace(/_/g, ' ')
+  }));
+
+const levyFields = Object.keys(municipalityData[0])
+  .filter(key => key.startsWith('levy_'))
+  .map(key => ({
+    id: key,
+    label: key.replace('levy_', '').replace(/_/g, ' ')
+  }));
+
+const expenditureFields = Object.keys(municipalityData[0])
+  .filter(key => key.startsWith('gf_exp_'))
+  .map(key => ({
+    id: key,
+    label: key.replace('gf_exp_', '').replace(/_/g, ' ')
+  }));
+```
+
+```js
+// Transform data for stacked charts
+const revenueData = filteredData.flatMap(d => {
+  const dataPoints = [];
+  
+  // Add non-tax revenue fields
+  revenueFields
+    .filter(field => convertValue(d[field.id]) > 0)
+    .forEach(field => {
+      dataPoints.push({
+        "Fiscal Year": d["Fiscal Year"],
+        Category: field.label,
+        Value: convertValue(d[field.id])
+      });
+    });
+  
+  // Add levy fields
+  levyFields
+    .filter(field => convertValue(d[field.id]) > 0)
+    .forEach(field => {
+      dataPoints.push({
+        "Fiscal Year": d["Fiscal Year"],
+        Category: field.label,
+        Value: convertValue(d[field.id])
+      });
+    });
+  
+  // Calculate Other Taxes = Taxes - sum of all levies
+  const totalTaxes = convertValue(d['gf_rev_Taxes']);
+  const totalLevies = levyFields.reduce((sum, field) => sum + convertValue(d[field.id]), 0);
+  const otherTaxes = totalTaxes - totalLevies;
+  
+  if (otherTaxes > 0) {
+    dataPoints.push({
+      "Fiscal Year": d["Fiscal Year"],
+      Category: "Other Taxes",
+      Value: otherTaxes
+    });
+  }
+  
+  return dataPoints;
+});
+
+const expenditureData = filteredData.flatMap(d => 
+  expenditureFields
+    .filter(field => convertValue(d[field.id]) > 0)
+    .map(field => ({
+      "Fiscal Year": d["Fiscal Year"],
+      Category: field.label,
+      Value: convertValue(d[field.id])
+    }))
+);
+```
+
+```js
+// Revenue stacked chart
+html`<div class="card">
+${Plot.plot({
+  title: `${selectedMunicipality}: Revenue Composition Over Time`,
+  width: 830,
+  height: 400,
+  x: {
+    label: "Fiscal Year",
+    type: "band",
+    tickFormat: d => d.toString()
+  },
+  y: {
+    label: "Revenue (Millions $)",
+    grid: true,
+    tickFormat: d => `$${(d / 1000000).toFixed(0)}M`
+  },
+  color: {
+    legend: true,
+    scheme: "category10"
+  },
+  marks: [
+    Plot.rectY(revenueData, {
+      x: "Fiscal Year",
+      y: "Value",
+      fill: "Category",
+      title: d => `${d.Category}\nFiscal Year: ${d["Fiscal Year"]}\nValue: $${(d.Value / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`
+    })
+  ]
+})}
+</div>`
+```
+
+```js
+// Expenditure stacked chart
+html`<div class="card">
+${Plot.plot({
+  title: `${selectedMunicipality}: Expenditure Composition Over Time`,
+  width: 830,
+  height: 400,
+  x: {
+    label: "Fiscal Year",
+    type: "band",
+    tickFormat: d => d.toString()
+  },
+  y: {
+    label: "Expenditures (Millions $)",
+    grid: true,
+    tickFormat: d => `$${(d / 1000000).toFixed(0)}M`
+  },
+  color: {
+    legend: true,
+    scheme: "category10"
+  },
+  marks: [
+    Plot.rectY(expenditureData, {
+      x: "Fiscal Year",
+      y: "Value",
+      fill: "Category",
+      title: d => `${d.Category}\nFiscal Year: ${d["Fiscal Year"]}\nValue: $${(d.Value / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`
+    })
+  ]
+})}
+</div>`
+```
+
+```js
+// Raw data table
+html`<div class="card">
+  <h2>Raw Data for ${selectedMunicipality}</h2>
+  ${Inputs.table(filteredData, {
+    sort: "Fiscal Year",
+    reverse: true
+  })}
 </div>`
 ```
