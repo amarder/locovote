@@ -2,6 +2,17 @@
 title: Municipalities
 ---
 
+<div class="tip" label="Key Questions">
+
+- Is my municipality balancing its budget?
+- What does my municipality spend its money on?
+- Where does my municipality get its money from?
+- What are the property tax rates?
+- How many people live there?
+- How have things changed over time?
+
+</div>
+
 ```js
 import {sankey, sankeyLinkHorizontal} from "npm:d3-sankey@0.12"
 import {SankeyChart} from "./components/sankey.js"
@@ -398,9 +409,9 @@ const populationChart = Plot.plot({
     tickFormat: d => d.toString()
   },
   y: {
-    label: "Population (thousands)",
+    label: "Population (Thousands)",
     grid: true,
-    tickFormat: d => (d / 1000).toFixed(0)
+    tickFormat: d => d / 1000
   },
   marks: [
     Plot.line(filteredData, {
@@ -442,7 +453,7 @@ const budgetData = filteredData.map(d => {
 ```js
 // Create budget surplus trend chart
 const surplusChart = Plot.plot({
-  title: `${selectedMunicipality}: Budget Surplus/Deficit Over Time`,
+  title: `${selectedMunicipality}: Budget Surplus Over Time`,
   width: 830,
   x: {
     label: "Fiscal Year",
@@ -450,9 +461,10 @@ const surplusChart = Plot.plot({
     tickFormat: d => d.toString()
   },
   y: {
-    label: "Budget Surplus/Deficit (Millions $)",
+    label: "Budget Surplus (Millions $)",
     grid: true,
-    tickFormat: d => `$${(d / 1000000).toFixed(1)}M`
+    tickFormat: d => d / 1_000_000
+    // tickFormat: d => `$${(d / 1000000).toFixed(1)}M`
   },
   marks: [
     // Zero line
@@ -516,7 +528,7 @@ const hasUniformRates = taxRateData.length > 0 && (() => {
 ```js
 // Create tax rates trend chart using facets for each property class
 const rateChart = Plot.plot({
-  title: `${selectedMunicipality}: Tax Rates by Property Class Over Time`,
+  title: `${selectedMunicipality}: Tax Rates Over Time`,
   width: 830,
   height: 400,
   x: {
@@ -525,11 +537,11 @@ const rateChart = Plot.plot({
     tickFormat: d => d.toString()
   },
   y: {
-    label: "Tax Rate (per $1,000 assessed value)",
+    label: "Tax Rate ($ per $1,000 assessed value)",
     grid: true
   },
   fx: {
-    label: "Property Class",
+    label: "",
     domain: [...new Set(taxRateData.map(d => d["Rate Type"]))].sort()
   },
   marks: [
@@ -633,7 +645,7 @@ const expenditureData = filteredData.flatMap(d =>
 ```js
 // Revenue stacked chart
 const revenueChart = Plot.plot({
-  title: `${selectedMunicipality}: Revenue Composition Over Time`,
+  title: `${selectedMunicipality}: Revenues Over Time`,
   width: 830,
   height: 400,
   x: {
@@ -642,9 +654,9 @@ const revenueChart = Plot.plot({
     tickFormat: d => d.toString()
   },
   y: {
-    label: "Revenue (Millions $)",
+    label: "Revenues (Millions $)",
     grid: true,
-    tickFormat: d => `$${(d / 1000000).toFixed(0)}M`
+    tickFormat: d => d / 1_000_000
   },
   color: {
     legend: true,
@@ -663,7 +675,7 @@ const revenueChart = Plot.plot({
 
 ```js
 const expenditureChart = Plot.plot({
-  title: `${selectedMunicipality}: Expenditure Composition Over Time`,
+  title: `${selectedMunicipality}: Expenditures Over Time`,
   width: 830,
   height: 400,
   x: {
@@ -674,7 +686,7 @@ const expenditureChart = Plot.plot({
   y: {
     label: "Expenditures (Millions $)",
     grid: true,
-    tickFormat: d => `$${(d / 1000000).toFixed(0)}M`
+    tickFormat: d => d / 1_000_000
   },
   color: {
     legend: true,
@@ -691,10 +703,12 @@ const expenditureChart = Plot.plot({
 });
 ```
 
+For debugging purposes, I've include a table of raw data below.
+
 ```js
 // Raw data table
 html`<div class="card">
-  <h2>Raw Data for ${selectedMunicipality}</h2>
+  <h2>${selectedMunicipality}: Raw Data</h2>
   ${Inputs.table(filteredData, {
     sort: "Fiscal Year",
     reverse: true
