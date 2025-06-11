@@ -4,10 +4,6 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ## Tasks
 
-### The Merge
-
-Merge all data about municipalities together, make a municipality snapshot page that shows all the data. Put the municipality name in the URL so people can send out links.
-
 ### School Snapshot
 
 Modify schools page to focus on one school at a time, put school name in the URL so people can send out links.
