@@ -381,10 +381,15 @@ ${sankeyDiagram}
 </figure>
 </div>
 
+<div class="card">${revenueChart}</div>
+<div class="card">${expenditureChart}</div>
+<div class="card">${surplusChart}</div>
+<div class="card">${populationChart}</div>
+<div class="card">${rateChart}</div>
+
 ```js
 // Create population trend chart
-html`<div class="card">
-${Plot.plot({
+const populationChart = Plot.plot({
   title: `${selectedMunicipality}: Population Over Time`,
   width: 830,
   x: {
@@ -412,8 +417,7 @@ ${Plot.plot({
       title: d => `${d["Fiscal Year"]}: ${d.pop_Population?.toLocaleString() || 'N/A'}`
     })
   ]
-})}
-</div>`
+});
 ```
 
 ```js
@@ -437,8 +441,7 @@ const budgetData = filteredData.map(d => {
 
 ```js
 // Create budget surplus trend chart
-html`<div class="card">
-${Plot.plot({
+const surplusChart = Plot.plot({
   title: `${selectedMunicipality}: Budget Surplus/Deficit Over Time`,
   width: 830,
   x: {
@@ -474,8 +477,7 @@ ${Plot.plot({
       }
     })
   ]
-})}
-</div>`
+});
 ```
 
 ```js
@@ -513,8 +515,7 @@ const hasUniformRates = taxRateData.length > 0 && (() => {
 
 ```js
 // Create tax rates trend chart using facets for each property class
-html`<div class="card">
-${Plot.plot({
+const rateChart = Plot.plot({
   title: `${selectedMunicipality}: Tax Rates by Property Class Over Time`,
   width: 830,
   height: 400,
@@ -548,14 +549,7 @@ ${Plot.plot({
       title: d => `${d["Rate Type"]}\n${d["Fiscal Year"]}: $${d["Tax Rate"]?.toFixed(2) || 'N/A'} per $1,000`
     })
   ]
-})}
-${hasUniformRates ? 
-  html`<p style="margin-top: 10px; font-style: italic; color: #666;">
-    <strong>Note:</strong> This municipality uses uniform tax rates across all property classes.
-  </p>` : 
-  html``
-}
-</div>`
+});
 ```
 
 ```js
@@ -638,8 +632,7 @@ const expenditureData = filteredData.flatMap(d =>
 
 ```js
 // Revenue stacked chart
-html`<div class="card">
-${Plot.plot({
+const revenueChart = Plot.plot({
   title: `${selectedMunicipality}: Revenue Composition Over Time`,
   width: 830,
   height: 400,
@@ -665,14 +658,11 @@ ${Plot.plot({
       title: d => `${d.Category}\nFiscal Year: ${d["Fiscal Year"]}\nValue: $${(d.Value / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`
     })
   ]
-})}
-</div>`
+});
 ```
 
 ```js
-// Expenditure stacked chart
-html`<div class="card">
-${Plot.plot({
+const expenditureChart = Plot.plot({
   title: `${selectedMunicipality}: Expenditure Composition Over Time`,
   width: 830,
   height: 400,
@@ -698,8 +688,7 @@ ${Plot.plot({
       title: d => `${d.Category}\nFiscal Year: ${d["Fiscal Year"]}\nValue: $${(d.Value / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`
     })
   ]
-})}
-</div>`
+});
 ```
 
 ```js

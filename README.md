@@ -4,10 +4,6 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ## Tasks
 
-### Municipalities Page
-
-Add ability to browse other time trends.
-
 ### School Snapshot
 
 Modify schools page to focus on one school at a time, put school name in the URL so people can send out links.
