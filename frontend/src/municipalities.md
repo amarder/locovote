@@ -47,12 +47,16 @@ const selectedMunicipality = view(Inputs.select(municipalities, {
 
 ```js
 // Create fiscal year input with URL sync
-const selectedFiscalYear = view(Inputs.select(fiscalYears, {
+const fiscalYearSelect = Inputs.select(fiscalYears, {
   label: "Select Fiscal Year:",
   value: fiscalYears.includes(initialFiscalYear) ? initialFiscalYear : fiscalYears[0],
   format: d => d.toString()
-}))
+});
+
+const selectedFiscalYear = view(fiscalYearSelect);
 ```
+
+
 
 ```js
 // Update URL when inputs change
@@ -79,8 +83,6 @@ const snapshotData = municipalityData.find(d =>
   d.Municipality === selectedMunicipality && 
   Number(d["Fiscal Year"]) === selectedFiscalYear
 )
-
-display(snapshotData)
 ```
 
 ```js
@@ -270,118 +272,114 @@ if (snapshotData && totalRevenue > 0) {
 ```
 
 ```js
-// Display summary
-if (snapshotData && totalRevenue > 0) {
-  display(html`
-    <div class="grid grid-cols-4" style="margin: 20px 0;">
-      <div class="card">
-        <strong>${selectedMunicipality}</strong><br>
-        ${selectedFiscalYear}
-      </div>
-      <div class="card">
+// Create budget summary variable
+const budgetSummary = snapshotData && totalRevenue > 0 ? 
+  html`
+    <div class="grid grid-cols-3" style="margin: 20px 0;">
+      <div class="card" style="background-color: #1e1e1e">
         <strong>Total Revenue</strong><br>
         $${(totalRevenue / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M
       </div>
-      <div class="card">
+      <div class="card" style="background-color: #1e1e1e">
         <strong>Total Expenditures</strong><br>
         $${(totalExpenditures / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M
       </div>
-      <div class="card">
+      <div class="card" style="background-color: #1e1e1e">
         <strong>${surplus >= 0 ? 'Budget Surplus' : 'Budget Deficit'}</strong><br>
         <span style="color: ${surplus >= 0 ? 'green' : 'red'}">
           $${Math.abs(surplus / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M
         </span>
       </div>
     </div>
-  `);
-} else {
-  display(html`
+  ` :
+  html`
     <div style="background: #fff3cd; padding: 20px; border-radius: 8px; margin: 10px 0; border-left: 4px solid #ffc107;">
       <strong>No general fund data available</strong> for ${selectedMunicipality} in ${selectedFiscalYear}
     </div>
-  `);
-}
+  `;
 ```
 
 ```js
-// Sankey diagram
-if (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) {
-  display(html`<div class="card">
-    <figure style="max-width: initial;">
-      <h2>${selectedMunicipality} ${selectedFiscalYear}: Revenues and Expenditures</h2>
-      ${SankeyChart(
-        {
-          nodes: sankeyData.nodes,
-          links: sankeyData.links
-        },
-        {
-          width: 830,
-          height: 500,
-          nodeGroup: d => d.category,
-        nodeSort: (a, b) => {
-          // Custom sorting logic
-          const getNodeValue = (node) => {
-            let value = 0;
-            const nodeCategory = nodeCategoryMap[node.id];
-            
-            if (nodeCategory === 'revenue') {
-              value = sankeyData.links
-                .filter(link => link.source === node.id)
-                .reduce((sum, link) => sum + link.value, 0);
-            } else if (nodeCategory === 'expenditure') {
-              value = sankeyData.links
-                .filter(link => link.target === node.id)
-                .reduce((sum, link) => sum + link.value, 0);
-            } else {
-              const incomingValue = sankeyData.links
-                .filter(link => link.target === node.id)
-                .reduce((sum, link) => sum + link.value, 0);
-              const outgoingValue = sankeyData.links
-                .filter(link => link.source === node.id)
-                .reduce((sum, link) => sum + link.value, 0);
-              value = Math.max(incomingValue, outgoingValue);
-            }
-            return value;
-          };
-          
-          const categoryOrder = {
-            'levy': 0.5,
-            'taxes': 1.5,
-            'revenue': 1,
-            'total': 2,
-            'expenditure': 3,
-            'deficit': 1.2,
-            'surplus': 3.5
-          };
-          
-          const aCategory = nodeCategoryMap[a.id];
-          const bCategory = nodeCategoryMap[b.id];
-          const aOrder = categoryOrder[aCategory] || 2;
-          const bOrder = categoryOrder[bCategory] || 2;
-          
-          if (aOrder !== bOrder) {
-            return aOrder - bOrder;
-          }
-          
-          if (aCategory === bCategory && (aCategory === 'revenue' || aCategory === 'expenditure')) {
-            const aValue = getNodeValue(a);
-            const bValue = getNodeValue(b);
-            return bValue - aValue;
-          }
-          
-          return 0;
-        },
-        colors: ["#6366f1", "#6366f1", "#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
-        linkColor: "#6366f1",
-                  format: "~s"
+// Create Sankey diagram variable
+const sankeyDiagram = (snapshotData && sankeyData.nodes.length > 0 && totalRevenue > 0) ?
+  SankeyChart(
+    {
+      nodes: sankeyData.nodes,
+      links: sankeyData.links
+    },
+    {
+      width: 830,
+      height: 500,
+      nodeGroup: d => d.category,
+    nodeSort: (a, b) => {
+      // Custom sorting logic
+      const getNodeValue = (node) => {
+        let value = 0;
+        const nodeCategory = nodeCategoryMap[node.id];
+        
+        if (nodeCategory === 'revenue') {
+          value = sankeyData.links
+            .filter(link => link.source === node.id)
+            .reduce((sum, link) => sum + link.value, 0);
+        } else if (nodeCategory === 'expenditure') {
+          value = sankeyData.links
+            .filter(link => link.target === node.id)
+            .reduce((sum, link) => sum + link.value, 0);
+        } else {
+          const incomingValue = sankeyData.links
+            .filter(link => link.target === node.id)
+            .reduce((sum, link) => sum + link.value, 0);
+          const outgoingValue = sankeyData.links
+            .filter(link => link.source === node.id)
+            .reduce((sum, link) => sum + link.value, 0);
+          value = Math.max(incomingValue, outgoingValue);
         }
-      )}
-    </figure>
-  </div>`);
-}
+        return value;
+      };
+      
+      const categoryOrder = {
+        'levy': 0.5,
+        'taxes': 1.5,
+        'revenue': 1,
+        'total': 2,
+        'expenditure': 3,
+        'deficit': 1.2,
+        'surplus': 3.5
+      };
+      
+      const aCategory = nodeCategoryMap[a.id];
+      const bCategory = nodeCategoryMap[b.id];
+      const aOrder = categoryOrder[aCategory] || 2;
+      const bOrder = categoryOrder[bCategory] || 2;
+      
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      
+      if (aCategory === bCategory && (aCategory === 'revenue' || aCategory === 'expenditure')) {
+        const aValue = getNodeValue(a);
+        const bValue = getNodeValue(b);
+        return bValue - aValue;
+      }
+      
+      return 0;
+    },
+    colors: ["#6366f1", "#6366f1", "#3b82f6", "#3b82f6", "#3b82f6", "#22c55e", "#ef4444"],
+    linkColor: "#6366f1",
+              format: "~s"
+    }
+  ) :
+  html``;
 ```
 
----
+<div class="card">
+${fiscalYearSelect}
+<figure style="max-width: initial;">
+      <h2>${selectedMunicipality} ${selectedFiscalYear}: Revenues and Expenditures</h2>
+${budgetSummary}
+${sankeyDiagram}
+</figure>
+</div>
 
 ```js
 // Create population trend chart
@@ -412,6 +410,68 @@ ${Plot.plot({
       fill: "steelblue",
       r: 4,
       title: d => `${d["Fiscal Year"]}: ${d.pop_Population?.toLocaleString() || 'N/A'}`
+    })
+  ]
+})}
+</div>`
+```
+
+```js
+// Calculate budget surplus/deficit for each year
+const budgetData = filteredData.map(d => {
+  const revenueFields = Object.keys(d).filter(key => key.startsWith('gf_rev_'));
+  const expenditureFields = Object.keys(d).filter(key => key.startsWith('gf_exp_'));
+  
+  const totalRevenue = revenueFields.reduce((sum, field) => sum + convertValue(d[field]), 0);
+  const totalExpenditures = expenditureFields.reduce((sum, field) => sum + convertValue(d[field]), 0);
+  const budgetSurplus = totalRevenue - totalExpenditures;
+  
+  return {
+    "Fiscal Year": d["Fiscal Year"],
+    "Budget Surplus": budgetSurplus,
+    "Total Revenue": totalRevenue,
+    "Total Expenditures": totalExpenditures
+  };
+}).filter(d => d["Total Revenue"] > 0); // Only include years with revenue data
+```
+
+```js
+// Create budget surplus trend chart
+html`<div class="card">
+${Plot.plot({
+  title: `${selectedMunicipality}: Budget Surplus/Deficit Over Time`,
+  width: 830,
+  x: {
+    label: "Fiscal Year",
+    type: "linear",
+    tickFormat: d => d.toString()
+  },
+  y: {
+    label: "Budget Surplus/Deficit (Millions $)",
+    grid: true,
+    tickFormat: d => `$${(d / 1000000).toFixed(1)}M`
+  },
+  marks: [
+    // Zero line
+    Plot.ruleY([0], {stroke: "gray", strokeDasharray: "3,3"}),
+    // Line chart
+    Plot.line(budgetData, {
+      x: "Fiscal Year",
+      y: "Budget Surplus",
+      stroke: "steelblue",
+      strokeWidth: 2
+    }),
+    // Points
+    Plot.dot(budgetData, {
+      x: "Fiscal Year", 
+      y: "Budget Surplus",
+      fill: "steelblue",
+      r: 4,
+      title: d => {
+        const surplus = d["Budget Surplus"];
+        const type = surplus >= 0 ? "Surplus" : "Deficit";
+        return `${d["Fiscal Year"]}: ${type} of $${Math.abs(surplus / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M`;
+      }
     })
   ]
 })}
