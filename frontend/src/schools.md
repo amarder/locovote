@@ -8,7 +8,7 @@ title: Schools
 
 - How well do schools in my community perform academically?
 - What percentage of students meet or exceed state standards on MCAS tests?
-- How does performance change over time, grade, subject?
+- How does MCAS performance vary by year, grade, and subject?
 
 </div>
 
@@ -24,7 +24,7 @@ const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_
 
 ```
 
-Select a school from the table below to explore their MCAS performance data. You can search by name.
+Select a school from the table below to explore MCAS performance data. Use the search functionality to quickly find schools by name.
 
 ```js
 const search = view(Inputs.search(schools, {format: (x) => x.toLocaleString() + " Schools"}));
@@ -175,16 +175,16 @@ async function createPerformanceChart(xAxis, title) {
 
 <div class="grid grid-cols-2">
   <div class="card">${createSchoolSummary()}</div>
-  ${createPerformanceChart("year", "Performance Over Time")}
-  ${createPerformanceChart("grade", "Performance by Grade")}
-  ${createPerformanceChart("subject", "Performance by Subject")}
+  ${createPerformanceChart("year", "MCAS Performance Over Time")}
+  ${createPerformanceChart("grade", "MCAS Performance by Grade Level")}
+  ${createPerformanceChart("subject", "MCAS Performance by Subject Area")}
 </div>
 
 ```js
 async function createDetailedPerformanceChart() {
   if (!selection) {
     return html`
-      <h3>Performance Over Time by Subject and Grade</h3>
+      <h3>MCAS Performance Over Time by Subject and Grade</h3>
       <p>Please select a school from the table above to see the chart.</p>
     `;
   }
@@ -200,7 +200,7 @@ async function createDetailedPerformanceChart() {
   
   if (data.length === 0) {
     return html`
-      <h3>Performance Over Time by Subject and Grade</h3>
+      <h3>Academic Performance Over Time by Subject and Grade</h3>
       <p>No data available for this school.</p>`;
   }
   
@@ -255,24 +255,25 @@ async function createDetailedPerformanceChart() {
   });
   
   return html`<div class="card">
-    <h3>Performance Over Time by Subject and Grade</h3>
+    <h3>MCAS Performance Over Time by Subject and Grade</h3>
     ${plot}
   </div>`
 }
 display(await createDetailedPerformanceChart());
 ```
 
-
-
 ## About the Data
 
-Test results are from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program. Data is provided by the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
+The performance data comes from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program that measures student achievement across core academic subjects. All data is sourced from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
 
-**Understanding the Metrics:**
-- **Exceeding Expectations:** Students demonstrate comprehensive understanding and skills beyond grade-level standards
-- **Meeting or Exceeding Expectations:** Students meet or surpass the minimum proficiency standards for their grade level
+**Performance Level Definitions:**
+- **Exceeding Expectations:** Students demonstrate comprehensive understanding and advanced skills that go beyond grade-level standards
+- **Meeting or Exceeding Expectations:** Students meet or surpass the minimum proficiency requirements established for their grade level
 
-For debugging purchases, I've included a table of the raw data below.
+The data includes test results across multiple years, grade levels, and subject areas, providing our best view into each school's academic performance trends.
+
+**Technical Details:**
+For reference, the raw data table below shows the underlying MCAS records for the selected school.
 
 ```js
 const rows = db.query(`SELECT * FROM mcas WHERE ORG_CODE = "${selection.school_code}"`);
