@@ -44,7 +44,7 @@ export default {
   ],
 
   // Content to add to the head of the page, e.g. for a favicon:
-  head: '<link rel="icon" href="observable.png" type="image/png" sizes="32x32">',
+  head: '<link rel="icon" href="observable.png" type="image/png" sizes="32x32"><script defer data-domain="locovote.com" src="https://plausible.io/js/script.js"></script>',
   footer: defaultFooter(),
 
   // The path to the source root.
