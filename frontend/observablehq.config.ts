@@ -33,12 +33,13 @@ export default {
   // lets you organize them into sections and have unlisted pages.
   pages: [
     {name: "Municipalities", path: "/municipalities"},
-    {name: "Schools", path: "/schools"},
+    {name: "School Districts", path: "/school-districts"},
     {name: "Data Sources", open: false, pages: [
       {name: "Revenues and Expenditures", path: "/general-fund"},
       {name: "Tax Levies by Class", path: "/tax-levies"},
       {name: "Tax Rates by Class", path: "/tax-rates"},
-      {name: "Population", path: "/population"}  
+      {name: "Population", path: "/population"},
+      {name: "MCAS Test Results", path: "/schools"}
     ]}
   ],
 
