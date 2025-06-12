@@ -27,22 +27,45 @@ const schools = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, ORG_
 Select a school from the table below to explore their MCAS performance data. You can search by name.
 
 ```js
-const search = view(Inputs.search(schools, {format: (x) => x + " schools"}));
+const search = view(Inputs.search(schools, {format: (x) => x.toLocaleString() + " Schools"}));
 ```
 
 ```js
-// debugger;
+// Get initial school from URL parameter
+function getInitialSelection() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const codeParam = urlParams.get('code');
+  
+  if (codeParam) {
+    const schoolFromUrl = search.find(school => school.school_code === codeParam);
+    if (schoolFromUrl) {
+      return schoolFromUrl;
+    }
+  }
+  
+  // Default to the 8th school if no URL parameter or school not found
+  return search.slice(7, 8)[0];
+}
 
 const my_table = Inputs.table(search, {
     required: true,
     multiple: false,
-    value: search.slice(7, 8)[0],
+    value: getInitialSelection(),
     columns: ["district", "school", "pct_e", "pct_me", "n"],
     header: {"district": "District", "school": "School", "pct_e": "Exceeding (%)", "pct_me": "Meeting or Exceeding (%)", "n": "# Tests"},
     format: {pct_e: (x) => x.toFixed(1), pct_me: (x) => x.toFixed(1)}
 });
 
 const selection = view(my_table);
+```
+
+```js
+// Update URL when selection changes (reactive cell)
+if (selection && selection.school_code) {
+  const url = new URL(window.location);
+  url.searchParams.set('code', selection.school_code);
+  window.history.replaceState({}, '', url);
+}
 ```
 
 <div class="card">${my_table}</div>
