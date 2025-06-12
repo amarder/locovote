@@ -6,9 +6,9 @@ title: School Districts
 
 <div class="tip" label="Key Questions">
 
-- How well do school districts in my community perform academically?
+- How does my school district perform academically?
 - What percentage of students meet or exceed state standards on MCAS tests?
-- How does MCAS performance vary by year, grade, and subject?
+- How does MCAS performance change by year, grade, and subject?
 
 </div>
 
@@ -24,7 +24,7 @@ const districts = db.query("SELECT DIST_NAME AS district, ORG_NAME AS school, OR
 
 ```
 
-Select a school district from the table below to explore MCAS performance data. Use the search functionality to quickly find districts by name.
+Select a school district from the table below to explore its MCAS test results. Use the search bar to quickly find districts by name.
 
 ```js
 const search = view(Inputs.search(districts, {format: (x) => x.toLocaleString() + " Districts"}));
@@ -75,7 +75,7 @@ function createDistrictSummary() {
   if (!selection) {
     return html`<div class="card">
       <h3>District Summary</h3>
-      <p>Please select a district from the table above to see details.</p>
+      <p>Please select a district from the table above to view its details.</p>
     </div>`;
   }
   
@@ -103,7 +103,7 @@ async function createPerformanceChart(xAxis, title) {
   if (!selection) {
     return html`<div class="card">
       <h3>${title}</h3>
-      <p>Please select a district from the table above to see the chart.</p>
+      <p>Please select a district from the table above to view this chart.</p>
     </div>`;
   }
   
@@ -169,19 +169,36 @@ async function createPerformanceChart(xAxis, title) {
 }
 ```
 
-<div class="grid grid-cols-2">
-  <div class="card">${createDistrictSummary()}</div>
-  ${createPerformanceChart("year", "MCAS Performance Over Time")}
-  ${createPerformanceChart("grade", "MCAS Performance by Grade Level")}
-  ${createPerformanceChart("subject", "MCAS Performance by Subject Area")}
-</div>
+```js
+async function renderDashboard() {
+  if (!selection) {
+    return html`<div class="card">Select a school district in the table above.</div>`;
+  }
+  
+  // Await all the chart promises
+  const [yearChart, gradeChart, subjectChart] = await Promise.all([
+    createPerformanceChart("year", "MCAS Performance by Year"),
+    createPerformanceChart("grade", "MCAS Performance by Grade"),
+    createPerformanceChart("subject", "MCAS Performance by Subject")
+  ]);
+  
+  return html`<div class="grid grid-cols-2">
+    <div class="card">${createDistrictSummary()}</div>
+    ${yearChart}
+    ${gradeChart}
+    ${subjectChart}
+  </div>`;
+}
+
+display(await renderDashboard());
+```
 
 ```js
 async function createDetailedPerformanceChart() {
   if (!selection) {
     return html`
-      <h3>MCAS Performance Over Time by Subject and Grade</h3>
-      <p>Please select a district from the table above to see the chart.</p>
+      <h3>MCAS Performance by Year, Subject, and Grade</h3>
+      <p>Please select a district from the table above to view this chart.</p>
     `;
   }
   
@@ -196,7 +213,7 @@ async function createDetailedPerformanceChart() {
   
   if (data.length === 0) {
     return html`
-      <h3>Academic Performance Over Time by Subject and Grade</h3>
+      <h3>Academic Performance by Year, Subject, and Grade</h3>
       <p>No data available for this district.</p>`;
   }
   
@@ -251,7 +268,7 @@ async function createDetailedPerformanceChart() {
   });
   
   return html`<div class="card">
-    <h3>MCAS Performance Over Time by Subject and Grade</h3>
+    <h3>MCAS Performance by Year, Grade, and Subject</h3>
     ${plot}
   </div>`
 }
@@ -260,19 +277,12 @@ display(await createDetailedPerformanceChart());
 
 ## About the Data
 
-The performance data comes from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program that measures student achievement across core academic subjects. All data is sourced from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
+The performance data is sourced from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program for measuring student achievement in core academic subjects. All data comes from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
 
 **Performance Level Definitions:**
-- **Exceeding Expectations:** Students demonstrate comprehensive understanding and advanced skills that go beyond grade-level standards
-- **Meeting or Exceeding Expectations:** Students meet or surpass the minimum proficiency requirements established for their grade level
+- **Exceeding Expectations:** Students demonstrate a comprehensive understanding and advanced skills that go beyond grade-level standards.
+- **Meeting or Exceeding Expectations:** Students meet or surpass the minimum proficiency requirements for their grade level.
 
-The data includes test results across multiple years, grade levels, and subject areas, providing our best view into each district's academic performance trends.
+The data includes test results across multiple years, grade levels, and subject areas, providing an excellent view into each district's academic performance trends.
 
-**Technical Details:**
-For reference, the raw data table below shows the underlying MCAS records for the selected district.
-
-```js
-const rows = db.query(`SELECT * FROM mcas WHERE ORG_CODE = "${selection.school_code}"`);
-```
-
-<div class="card">${view(Inputs.table(rows))}</div>
+To view results for individual schools, visit the [Schools page](/schools).

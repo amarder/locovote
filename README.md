@@ -8,6 +8,8 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 The high school pages are light on info, it will be more helpful to compare school districts.
 
+It might be nice to include participation rate.
+
 ### Add Plausible Analytics
 
 ### Link Schools to Municipalities
