@@ -4,6 +4,8 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ## Tasks
 
+- [ ] Comparison pages
+
 - [ ] Set up per capita view on municipalities page
 - [ ] Look into SAT data
 - [ ] Link schools to municipalities, figure out how to merge school data onto municipalities
