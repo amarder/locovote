@@ -33,17 +33,18 @@ export default {
   // lets you organize them into sections and have unlisted pages.
   pages: [
     {name: "Municipalities", path: "/municipalities"},
-    {name: "Schools", path: "/schools"},
+    {name: "School Districts", path: "/school-districts"},
     {name: "Data Sources", open: false, pages: [
       {name: "Revenues and Expenditures", path: "/general-fund"},
       {name: "Tax Levies by Class", path: "/tax-levies"},
       {name: "Tax Rates by Class", path: "/tax-rates"},
-      {name: "Population", path: "/population"}  
+      {name: "Population", path: "/population"},
+      {name: "MCAS Test Results", path: "/schools"}
     ]}
   ],
 
   // Content to add to the head of the page, e.g. for a favicon:
-  head: '<link rel="icon" href="observable.png" type="image/png" sizes="32x32">',
+  head: '<link rel="icon" href="observable.png" type="image/png" sizes="32x32"><script defer data-domain="locovote.com" src="https://plausible.io/js/script.js"></script>',
   footer: defaultFooter(),
 
   // The path to the source root.

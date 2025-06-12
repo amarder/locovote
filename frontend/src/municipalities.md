@@ -2,6 +2,8 @@
 title: Municipalities
 ---
 
+# Municipalities
+
 <div class="tip" label="Key Questions">
 
 - Is my municipality balancing its budget?

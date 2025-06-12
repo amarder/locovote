@@ -4,15 +4,10 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ## Tasks
 
-### District Snapshot
-
-The high school pages are light on info, it will be more helpful to compare school districts.
-
-### Add Plausible Analytics
-
-### Link Schools to Municipalities
-
-Merge school data onto municipalities
+- [ ] Set up per capita view on municipalities page
+- [ ] Look into SAT data
+- [ ] Link schools to municipalities, figure out how to merge school data onto municipalities
+- [ ] Include participation rate in MCAS data
 
 ### School Finances
 
