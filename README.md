@@ -4,9 +4,9 @@ Welcome to the source code underlying [locovote.com](https://locovote.com/). Loc
 
 ## Tasks
 
-### School Snapshot
+### District Snapshot
 
-Modify schools page to focus on one school at a time, put school name in the URL so people can send out links.
+The high school pages are light on info, it will be more helpful to compare school districts.
 
 ### Add Plausible Analytics
 
