@@ -15,7 +15,7 @@ title: Population
 ## Time Trends
 
 ```js
-const data = FileAttachment("./data/population.arrow").arrow()
+const data = FileAttachment("/data/population.arrow").arrow()
 ```
 
 ```js

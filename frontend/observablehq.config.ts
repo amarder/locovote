@@ -32,16 +32,16 @@ export default {
   // all pages will be listed in alphabetical order. Listing pages explicitly
   // lets you organize them into sections and have unlisted pages.
   pages: [
-    {name: "Municipalities", path: "/compare-municipalities"},
-    {name: "School Districts", path: "/compare-school-districts"},
+    {name: "Municipalities", path: "/municipalities"},
+    {name: "School Districts", path: "/school-districts"},
     {name: "Data", open: false, pages: [
-      {name: "Municipalities", path: "/municipalities"},
-      {name: "Revenues and Expenditures", path: "/general-fund"},
-      {name: "Tax Levies by Class", path: "/tax-levies"},
-      {name: "Tax Rates by Class", path: "/tax-rates"},
-      {name: "Population", path: "/population"},
-      {name: "Schools", path: "/schools"},
-      {name: "School Districts", path: "/school-districts"},  
+      {name: "Municipalities", path: "/data/municipalities"},
+      {name: "Revenues and Expenditures", path: "/data/general-fund"},
+      {name: "Tax Levies by Class", path: "/data/tax-levies"},
+      {name: "Tax Rates by Class", path: "/data/tax-rates"},
+      {name: "Population", path: "/data/population"},
+      {name: "Schools", path: "/data/schools"},
+      {name: "School Districts", path: "/data/school-districts"},  
     ]}
   ],
 

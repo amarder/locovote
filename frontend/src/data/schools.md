@@ -15,7 +15,7 @@ title: Schools
 ```js
 import SQLite from "npm:@observablehq/sqlite";
 
-const db = FileAttachment("data/mcas.db").sqlite();
+const db = FileAttachment("/data/mcas.db").sqlite();
 ```
 
 ```js

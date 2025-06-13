@@ -29,7 +29,7 @@ Massachusetts property tax law divides all taxable property into five distinct c
 Select one or more municipalities from the dropdown to compare their tax composition. Choose different levy types to see how each contributes to the total tax revenue over time. The chart shows each levy type as a percentage of the municipality's total property tax levy, helping you understand the relative importance of different property classes.
 
 ```js
-const data = FileAttachment("./data/tax-levies.arrow").arrow()
+const data = FileAttachment("/data/tax-levies.arrow").arrow()
 ```
 
 ```js
