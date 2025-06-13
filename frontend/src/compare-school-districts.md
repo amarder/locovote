@@ -10,7 +10,6 @@ This tool allows you to compare the academic performance of different Massachuse
 <div class="tip" label="Key Questions This Tool Answers">
 
 - **How do different districts compare academically?** See performance trends across multiple districts.
-- **Which districts are improving over time?** Track changes in test scores by year.
 - **How does performance vary by subject?** Compare districts in English, Math, and Science.
 - **Are there grade-level differences?** Analyze performance patterns across elementary, middle, and high school grades.
 
@@ -45,7 +44,67 @@ const selected = view(searchCheckbox(districtNames, { urlParam: "districts", val
 const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
 ```
 
-## Performance Over Time by Variable
+## Overall Performance
+
+This table shows the overall MCAS performance for each selected school district, aggregated across all years, grades, and subjects in the dataset.
+
+```js
+async function createDistrictComparisonTable() {
+  if (selected.length === 0) {
+    return html`<div style="padding: 20px; text-align: center; color: #666; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+      <p>Select school districts to view comparison table</p>
+    </div>`;
+  }
+  
+  const districtList = selected.map(d => `'${d}'`).join(',');
+  
+  const query = `
+    SELECT 
+      DIST_NAME as district,
+      100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
+      100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding,
+      SUM(n) as total_tests
+    FROM mcas 
+    WHERE SUBSTR(ORG_CODE, -4) = '0000' 
+      AND DIST_NAME IN (${districtList})
+      AND n > 0
+    GROUP BY DIST_NAME
+    ORDER BY DIST_NAME
+  `;
+  
+  const data = await db.query(query);
+  
+  // Reorder data to match selection order
+  const orderedData = selected.map(selectedDistrict => 
+    data.find(d => d.district === selectedDistrict)
+  ).filter(d => d !== undefined);
+  
+  return Inputs.table(orderedData, {
+    columns: ["district", "pct_meeting_or_exceeding", "pct_exceeding", "total_tests"],
+    header: {
+      "district": "School District", 
+      "pct_meeting_or_exceeding": "Meeting or Exceeding (%)", 
+      "pct_exceeding": "Exceeding (%)", 
+      "total_tests": "# Tests"
+    },
+    format: {
+      pct_meeting_or_exceeding: (x) => x.toFixed(1), 
+      pct_exceeding: (x) => x.toFixed(1),
+      total_tests: (x) => x.toLocaleString()
+    },
+    width: {
+      district: 200,
+      pct_meeting_or_exceeding: 120,
+      pct_exceeding: 100,
+      total_tests: 80
+    }
+  });
+}
+```
+
+<div class="card">${await createDistrictComparisonTable()}</div>
+
+## Performance Over Time
 
 This chart shows how districts compare on the two key performance metrics over time. Each line represents a different district, with separate panels for "Exceeding Expectations" and "Meeting or Exceeding Expectations".
 
@@ -137,7 +196,7 @@ async function createPerformanceOverTimeChart() {
 
 <div class="card">${await createPerformanceOverTimeChart()}</div>
 
-## Performance by Variable and Subject
+## Performance by Subject
 
 This chart breaks down performance by subject area, allowing you to see which districts excel in specific subjects and how performance varies between English, Math, and Science.
 
@@ -239,7 +298,7 @@ async function createPerformanceBySubjectChart() {
 
 <div class="card">${await createPerformanceBySubjectChart()}</div>
 
-## Performance by Variable and Grade
+## Performance by Grade
 
 This chart shows performance across different grade levels, helping you understand how districts perform at elementary, middle, and high school levels.
 
