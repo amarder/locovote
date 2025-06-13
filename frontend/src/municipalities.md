@@ -289,15 +289,15 @@ if (snapshotData && totalRevenue > 0) {
 const budgetSummary = snapshotData && totalRevenue > 0 ? 
   html`
     <div class="grid grid-cols-3" style="margin: 20px 0;">
-      <div class="card" style="background-color: #1e1e1e">
+      <div class="card">
         <strong>Total Revenue</strong><br>
         $${(totalRevenue / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M
       </div>
-      <div class="card" style="background-color: #1e1e1e">
+      <div class="card">
         <strong>Total Expenditures</strong><br>
         $${(totalExpenditures / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M
       </div>
-      <div class="card" style="background-color: #1e1e1e">
+      <div class="card">
         <strong>${surplus >= 0 ? 'Budget Surplus' : 'Budget Deficit'}</strong><br>
         <span style="color: ${surplus >= 0 ? 'green' : 'red'}">
           $${Math.abs(surplus / 1_000_000).toLocaleString(undefined, {maximumFractionDigits: 2})}M
