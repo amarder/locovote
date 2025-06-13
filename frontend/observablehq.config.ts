@@ -32,20 +32,16 @@ export default {
   // all pages will be listed in alphabetical order. Listing pages explicitly
   // lets you organize them into sections and have unlisted pages.
   pages: [
-    {name: "Compare", open: true, pages: [
-      {name: "Municipalities", path: "/compare-municipalities"},
-      {name: "School Districts", path: "/compare-school-districts"},
-    ]},
-    {name: "Inspect", open: false, pages: [
+    {name: "Municipalities", path: "/compare-municipalities"},
+    {name: "School Districts", path: "/compare-school-districts"},
+    {name: "Data", open: false, pages: [
       {name: "Municipalities", path: "/municipalities"},
-      {name: "School Districts", path: "/school-districts"},  
-    ]},
-    {name: "Data Sources", open: false, pages: [
       {name: "Revenues and Expenditures", path: "/general-fund"},
       {name: "Tax Levies by Class", path: "/tax-levies"},
       {name: "Tax Rates by Class", path: "/tax-rates"},
       {name: "Population", path: "/population"},
-      {name: "MCAS Test Results", path: "/schools"}
+      {name: "Schools", path: "/schools"},
+      {name: "School Districts", path: "/school-districts"},  
     ]}
   ],
 
@@ -62,7 +58,7 @@ export default {
   // footer: "Built with Observable.", // what to show in the footer (HTML)
   // sidebar: true, // whether to show the sidebar
   // toc: true, // whether to show the table of contents
-  // pager: true, // whether to show previous & next links in the footer
+  pager: false, // whether to show previous & next links in the footer
   // output: "dist", // path to the output root for build
   // search: true, // activate search
   // linkify: true, // convert URLs in Markdown to links
