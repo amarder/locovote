@@ -10,12 +10,12 @@ Locovote makes town data easy to navigate so you can find towns that match your 
 
 <div class="grid grid-cols-4">
 <div class="card">
-<a href="/compare-municipalities">Municipalities</a>
+<a href="/municipalities">Municipalities</a>
 
 What does each town spend money on and who's paying for it?
 </div>
 <div class="card">
-<a href="/compare-school-districts">School Districts</a>
+<a href="/school-districts">School Districts</a>
 
 How are students performing on standardized tests?
 </div>
