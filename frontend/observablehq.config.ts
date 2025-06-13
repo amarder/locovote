@@ -36,12 +36,12 @@ export default {
     {name: "School Districts", path: "/school-districts"},
     {name: "Data", open: false, pages: [
       {name: "Municipalities", path: "/data/municipalities"},
+      {name: "School Districts", path: "/data/school-districts"},  
+      {name: "Schools", path: "/data/schools"},
       {name: "Revenues and Expenditures", path: "/data/general-fund"},
       {name: "Tax Levies by Class", path: "/data/tax-levies"},
       {name: "Tax Rates by Class", path: "/data/tax-rates"},
       {name: "Population", path: "/data/population"},
-      {name: "Schools", path: "/data/schools"},
-      {name: "School Districts", path: "/data/school-districts"},  
     ]}
   ],
 
