@@ -32,8 +32,10 @@ export default {
   // all pages will be listed in alphabetical order. Listing pages explicitly
   // lets you organize them into sections and have unlisted pages.
   pages: [
-    {name: "Municipalities", path: "/compare-municipalities"},
-    {name: "School Districts", path: "/compare-school-districts"},
+    {name: "Compare", open: true, pages: [
+      {name: "Municipalities", path: "/compare-municipalities"},
+      {name: "School Districts", path: "/compare-school-districts"},
+    ]},
     {name: "Inspect", open: false, pages: [
       {name: "Municipalities", path: "/municipalities"},
       {name: "School Districts", path: "/school-districts"},  

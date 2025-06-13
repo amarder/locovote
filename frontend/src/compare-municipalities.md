@@ -1,14 +1,25 @@
+---
+title: Compare Municipalities
+toc: true
+---
+
 # Compare Municipalities
 
-<div class="tip" label="Key Questions">
+This tool allows you to compare the financial health and tax burden of different Massachusetts municipalities over time. Use the search box below to select municipalities and explore how they differ in spending priorities, revenue sources, tax rates, and budget management.
 
-- What does my municipality spend its money on?
-- Where does my municipality get its money from?
-- How much does it cost to live in my municipality / what's the residential property tax rate?
-- Is my municipality balancing its budget?
-- How many people live there?
+<div class="tip" label="Key Questions This Tool Answers">
+
+- **What does my municipality spend its money on?** See the breakdown of expenditures by category and how priorities have changed over time.
+- **Where does my municipality get its money from?** Understand the revenue mix, including property taxes, state aid, and other sources.
+- **How much does it cost to live in my municipality?** Compare residential property tax rates across communities.
+- **Is my municipality balancing its budget?** Track budget surpluses and deficits to assess financial stability.
+- **How many people live there?** View population trends that affect per-capita spending and revenue needs.
 
 </div>
+
+### Select Municipalities to Compare
+
+Choose multiple municipalities to compare their financial profiles. Popular comparisons include similar-sized communities, neighboring towns, or places you're considering moving to.
 
 ```js
 import {searchCheckbox} from "./components/search-select.js"
@@ -38,7 +49,7 @@ const selected = view(searchCheckbox(names, { urlParam: "municipalities", value:
 const filteredData = data.filter(d => selected.includes(d.Municipality));
 
 // Population Over Time (by municipality)
-const populationChart = Plot.plot({
+const populationChart = filteredData.length > 0 ? Plot.plot({
   title: "Population",
   width: 830,
   height: 400,
@@ -72,7 +83,9 @@ const populationChart = Plot.plot({
       title: d => `${d.Municipality}\n${d["Fiscal Year"]}: ${d.pop_Population?.toLocaleString() || 'N/A'}`
     })
   ]
-});
+}) : html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+  <p style="color: #666; margin: 0;">Select municipalities to view population trends</p>
+</div>`;
 
 // Helper function to safely convert values
 const convertValue = (value) => {
@@ -82,14 +95,14 @@ const convertValue = (value) => {
 };
 
 // Convert data to Arquero table and calculate revenue percentages
-const revenueTable = aq.from(filteredData)
+const revenueTable = filteredData.length > 0 ? aq.from(filteredData)
   .derive({
     // Calculate total revenue for each row
     total_revenue: aq.escape(d => Object.keys(d)
       .filter(key => key.startsWith('gf_rev_'))
       .reduce((sum, key) => sum + (typeof d[key] === 'bigint' ? Number(d[key]) : Number(d[key]) || 0), 0))
   })
-  .filter(d => d.total_revenue > 0);
+  .filter(d => d.total_revenue > 0) : aq.table({});
 
 // Get all revenue field names
 const allRevenueFields = Object.keys(filteredData[0] || {}).filter(key => key.startsWith('gf_rev_'));
@@ -169,14 +182,14 @@ revenueTable.objects().forEach(row => {
 });
 
 // Convert data to Arquero table and calculate expenditure percentages
-const expenditureTable = aq.from(filteredData)
+const expenditureTable = filteredData.length > 0 ? aq.from(filteredData)
   .derive({
     // Calculate total expenditures for each row
     total_expenditures: aq.escape(d => Object.keys(d)
       .filter(key => key.startsWith('gf_exp_'))
       .reduce((sum, key) => sum + (typeof d[key] === 'bigint' ? Number(d[key]) : Number(d[key]) || 0), 0))
   })
-  .filter(d => d.total_expenditures > 0);
+  .filter(d => d.total_expenditures > 0) : aq.table({});
 
 // Get all expenditure field names
 const allExpenditureFields = Object.keys(filteredData[0] || {}).filter(key => key.startsWith('gf_exp_'));
@@ -200,22 +213,27 @@ expenditureTable.objects().forEach(row => {
 });
 
 // Debug: Verify percentages sum to 100% using Arquero
-const revenueCheck = aq.from(percentageRevenueData)
-  .groupby('Municipality', 'Fiscal Year')
-  .rollup({ 
-    total_percentage: d => aq.op.sum(d.Percentage),
-    categories: d => aq.op.array_agg(d.Category)
-  })
-  .filter(d => Math.abs(d.total_percentage - 100) > 0.1);
+const revenueCheck = percentageRevenueData.length > 0 ? 
+  aq.from(percentageRevenueData)
+    .groupby('Municipality', 'Fiscal Year')
+    .rollup({ 
+      total_percentage: d => aq.op.sum(d.Percentage),
+      categories: d => aq.op.array_agg(d.Category)
+    })
+    .filter(d => Math.abs(d.total_percentage - 100) > 0.1) :
+  aq.table({});
 
-const expenditureCheck = aq.from(percentageExpenditureData)
-  .groupby('Municipality', 'Fiscal Year')
-  .rollup({ 
-    total_percentage: d => aq.op.sum(d.Percentage),
-    categories: d => aq.op.array_agg(d.Category)
-  })
-  .filter(d => Math.abs(d.total_percentage - 100) > 0.1);
+const expenditureCheck = percentageExpenditureData.length > 0 ?
+  aq.from(percentageExpenditureData)
+    .groupby('Municipality', 'Fiscal Year')
+    .rollup({ 
+      total_percentage: d => aq.op.sum(d.Percentage),
+      categories: d => aq.op.array_agg(d.Category)
+    })
+    .filter(d => Math.abs(d.total_percentage - 100) > 0.1) :
+  aq.table({});
 
+/*
 console.log("=== ARQUERO REVENUE PERCENTAGE DEBUG ===");
 if (revenueCheck.numRows() > 0) {
   console.log("Revenue percentages not summing to 100%:");
@@ -231,6 +249,7 @@ if (expenditureCheck.numRows() > 0) {
 } else {
   console.log("All expenditure percentages sum to ~100% ✓");
 }
+*/
 
 // Calculate top 5 revenue categories by total value
 const revenueTotals = {};
@@ -244,9 +263,7 @@ const top5RevenueCategories = Object.entries(revenueTotals)
   .map(([category,]) => category);
 
 const filteredRevenueData = percentageRevenueData.filter(d => top5RevenueCategories.includes(d.Category));
-
-// Revenue percentage chart with facets by category
-const revenuePercentageChart = Plot.plot({
+const revenuePercentageChart = filteredRevenueData.length > 0 ? Plot.plot({
   title: "Revenue Composition - Top 5 Categories",
   width: 830,
   height: 400,
@@ -286,7 +303,9 @@ const revenuePercentageChart = Plot.plot({
       title: d => `${d.Municipality}\n${d.Category}\n${d["Fiscal Year"]}: ${d.Percentage.toFixed(1)}% ($${(d.Value / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M)`
     })
   ]
-});
+}) : html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+  <p style="color: #666; margin: 0;">Select municipalities to view revenue composition</p>
+</div>`;
 
 // Calculate top 5 expenditure categories by total value
 const expenditureTotals = {};
@@ -300,9 +319,7 @@ const top5ExpenditureCategories = Object.entries(expenditureTotals)
   .map(([category,]) => category);
 
 const filteredExpenditureData = percentageExpenditureData.filter(d => top5ExpenditureCategories.includes(d.Category));
-
-// Expenditure percentage chart with facets by category
-const expenditurePercentageChart = Plot.plot({
+const expenditurePercentageChart = filteredExpenditureData.length > 0 ? Plot.plot({
   title: "Expenditure Composition - Top 5 Categories",
   width: 830,
   height: 400,
@@ -342,7 +359,9 @@ const expenditurePercentageChart = Plot.plot({
       title: d => `${d.Municipality}\n${d.Category}\n${d["Fiscal Year"]}: ${d.Percentage.toFixed(1)}% ($${(d.Value / 1000000).toLocaleString(undefined, {maximumFractionDigits: 2})}M)`
     })
   ]
-});
+}) : html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+  <p style="color: #666; margin: 0;">Select municipalities to view expenditure composition</p>
+</div>`;
 
 // Budget Surplus Over Time (by municipality)
 const budgetData = filteredData.map(d => {
@@ -360,7 +379,7 @@ const budgetData = filteredData.map(d => {
   };
 }).filter(d => d["Total Revenue"] > 0);
 
-const surplusChart = Plot.plot({
+const surplusChart = budgetData.length > 0 ? Plot.plot({
   title: "Budget Surplus",
   width: 830,
   height: 400,
@@ -399,7 +418,9 @@ const surplusChart = Plot.plot({
       }
     })
   ]
-});
+}) : html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+  <p style="color: #666; margin: 0;">Select municipalities to view budget surplus</p>
+</div>`;
 
 // Tax Rates Over Time (by municipality, all rate types)
 const rateTypes = [
@@ -419,7 +440,7 @@ const taxRateData = filteredData.flatMap(d =>
       "Tax Rate": d[rate.field]
     }))
 );
-const rateChart = Plot.plot({
+const rateChart = taxRateData.length > 0 ? Plot.plot({
   title: "Tax Rates",
   width: 830,
   height: 400,
@@ -457,13 +478,43 @@ const rateChart = Plot.plot({
       title: d => `${d.Municipality}\n${d["Rate Type"]}\n${d["Fiscal Year"]}: $${d["Tax Rate"]?.toFixed(2) || 'N/A'} per $1,000`
     })
   ]
-});
+}) : html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+  <p style="color: #666; margin: 0;">Select municipalities to view tax rates</p>
+</div>`;
 ```
 
+## Spending Priorities
+
+The chart below shows what percentage of each municipality's budget goes to different spending categories. Education typically represents the largest expense for most communities. Notice how priorities can vary significantly between communities of different sizes and characteristics.
+
 <div class="card">${expenditurePercentageChart}</div>
+
+## Revenue Sources
+
+This chart breaks down how municipalities fund their operations. Property taxes usually make up the largest share, but the mix varies considerably. Communities with more commercial and industrial property typically have lower residential tax rates.
+
 <div class="card">${revenuePercentageChart}</div>
+
+## Cost of Living
+
+Property tax rates show how much residents pay per $1,000 of their home's assessed value. These rates reflect both the community's spending levels and the strength of its tax base. A community with expensive commercial property or high property values can often maintain lower residential tax rates while still funding quality services.
+
+**Note:** Rates shown include residential, commercial, industrial, personal property, and open space categories. Many communities use the same rate for all property types, while others set different rates to shift tax burden between residential and commercial properties.
+
 <div class="card">${rateChart}</div>
+
+## Financial Health
+
+This chart shows whether municipalities are running budget surpluses (spending less than they take in) or deficits (spending more than their revenue). Consistent deficits may indicate financial stress, while large surpluses might suggest opportunities for increased services or tax relief. Small fluctuations are normal, but dramatic swings can signal budget management challenges.
+
 <div class="card">${surplusChart}</div>
+
+## Population Trends
+
+Population growth or decline affects municipal finances in multiple ways. Growing communities often face pressure to expand services and infrastructure, while shrinking communities may struggle with fixed costs spread across fewer residents. Understanding population trends helps explain changes in per-capita spending and revenue needs.
+
 <div class="card">${populationChart}</div>
 
-To see a more complete view of a municipality's finances visit [this page](/municipalities).
+## Next Steps
+
+Want to dive deeper into a specific municipality's finances? Visit our [detailed municipal profiles page](/municipalities) to see comprehensive financial data, including historical trends, debt levels, and detailed budget breakdowns for individual communities.
