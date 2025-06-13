@@ -104,7 +104,7 @@ async function createDistrictComparisonTable() {
 
 <div class="card">${await createDistrictComparisonTable()}</div>
 
-## Performance Over Time
+## Performance by Year
 
 This chart shows how districts compare on the two key performance metrics over time. Each line represents a different district, with separate panels for "Exceeding Expectations" and "Meeting or Exceeding Expectations".
 
@@ -151,7 +151,7 @@ async function createPerformanceOverTimeChart() {
   ]);
   
   return Plot.plot({
-    title: "MCAS Performance Over Time",
+    title: "MCAS Performance by Year",
     width: 830,
     height: 400,
     x: {
@@ -203,7 +203,7 @@ This chart breaks down performance by subject area, allowing you to see which di
 ```js
 async function createPerformanceBySubjectChart() {
   if (selected.length === 0) {
-    return html`<div style="width: 830px; height: 600px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+    return html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
       <p style="color: #666; margin: 0;">Select school districts to view performance by subject</p>
     </div>`;
   }
@@ -213,7 +213,6 @@ async function createPerformanceBySubjectChart() {
   const query = `
     SELECT 
       DIST_NAME as district,
-      year,
       SUBJECT_CODE as subject,
       100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
       100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding
@@ -221,8 +220,8 @@ async function createPerformanceBySubjectChart() {
     WHERE SUBSTR(ORG_CODE, -4) = '0000' 
       AND DIST_NAME IN (${districtList})
       AND n > 0
-    GROUP BY DIST_NAME, year, SUBJECT_CODE
-    ORDER BY DIST_NAME, year, SUBJECT_CODE
+    GROUP BY DIST_NAME, SUBJECT_CODE
+    ORDER BY DIST_NAME, SUBJECT_CODE
   `;
   
   const data = await db.query(query);
@@ -231,14 +230,12 @@ async function createPerformanceBySubjectChart() {
   const chartData = data.flatMap(d => [
     {
       district: d.district,
-      year: d.year,
       subject: d.subject,
       variable: "Exceeding Expectations",
       percentage: d.pct_exceeding
     },
     {
       district: d.district,
-      year: d.year,
       subject: d.subject,
       variable: "Meeting or Exceeding Expectations", 
       percentage: d.pct_meeting_or_exceeding
@@ -246,14 +243,12 @@ async function createPerformanceBySubjectChart() {
   ]);
   
   return Plot.plot({
-    title: "MCAS Performance Over Time by Subject",
+    title: "MCAS Performance by Subject",
     width: 830,
-    height: 600,
-    marginRight: 50,
+    height: 400,
     x: {
-      label: "Year",
-      type: "linear", 
-      tickFormat: d => d.toString()
+      label: "",
+      tickFormat: d => subjectLabels[d] || d
     },
     y: {
       label: "Percentage of Students (%)",
@@ -264,32 +259,26 @@ async function createPerformanceBySubjectChart() {
       label: "",
       domain: ["Meeting or Exceeding Expectations", "Exceeding Expectations"]
     },
-    fy: {
-      label: "",
-      tickFormat: d => subjectLabels[d] || d
-    },
     color: {
       legend: true,
       scheme: "category10"
     },
     marks: [
       Plot.line(chartData, {
-        x: "year",
+        x: "subject",
         y: "percentage",
         fx: "variable",
-        fy: "subject", 
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}\n${d.variable}\n${d.year}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
       }),
       Plot.dot(chartData, {
-        x: "year",
+        x: "subject",
         y: "percentage",
-        fx: "variable", 
-        fy: "subject",
+        fx: "variable",
         fill: "district",
         r: 3,
-        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}\n${d.variable}\n${d.year}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
       })
     ]
   });
@@ -305,7 +294,7 @@ This chart shows performance across different grade levels, helping you understa
 ```js
 async function createPerformanceByGradeChart() {
   if (selected.length === 0) {
-    return html`<div style="width: 830px; height: 800px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+    return html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
       <p style="color: #666; margin: 0;">Select school districts to view performance by grade</p>
     </div>`;
   }
@@ -315,7 +304,6 @@ async function createPerformanceByGradeChart() {
   const query = `
     SELECT 
       DIST_NAME as district,
-      year,
       grade,
       100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
       100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding
@@ -323,8 +311,8 @@ async function createPerformanceByGradeChart() {
     WHERE SUBSTR(ORG_CODE, -4) = '0000' 
       AND DIST_NAME IN (${districtList})
       AND n > 0
-    GROUP BY DIST_NAME, year, grade
-    ORDER BY DIST_NAME, year, grade
+    GROUP BY DIST_NAME, grade
+    ORDER BY DIST_NAME, grade
   `;
   
   const data = await db.query(query);
@@ -333,14 +321,12 @@ async function createPerformanceByGradeChart() {
   const chartData = data.flatMap(d => [
     {
       district: d.district,
-      year: d.year,
       grade: d.grade,
       variable: "Exceeding Expectations",
       percentage: d.pct_exceeding
     },
     {
       district: d.district,
-      year: d.year,
       grade: d.grade,
       variable: "Meeting or Exceeding Expectations", 
       percentage: d.pct_meeting_or_exceeding
@@ -348,13 +334,11 @@ async function createPerformanceByGradeChart() {
   ]);
   
   return Plot.plot({
-    title: "MCAS Performance Over Time by Grade",
+    title: "MCAS Performance by Grade",
     width: 830,
-    height: 1200,
+    height: 400,
     x: {
-      label: "Year", 
-      type: "linear",
-      tickFormat: d => d.toString()
+      label: "Grade"
     },
     y: {
       label: "Percentage of Students (%)",
@@ -365,31 +349,26 @@ async function createPerformanceByGradeChart() {
       label: "",
       domain: ["Meeting or Exceeding Expectations", "Exceeding Expectations"]
     },
-    fy: {
-      label: "Grade"
-    },
     color: {
       legend: true,
       scheme: "category10"
     },
     marks: [
       Plot.line(chartData, {
-        x: "year",
+        x: "grade",
         y: "percentage",
         fx: "variable",
-        fy: "grade",
-        stroke: "district", 
+        stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\nGrade ${d.grade}\n${d.variable}\n${d.year}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\nGrade ${d.grade}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
       }),
       Plot.dot(chartData, {
-        x: "year", 
+        x: "grade",
         y: "percentage",
         fx: "variable",
-        fy: "grade",
         fill: "district",
         r: 3,
-        title: d => `${d.district}\nGrade ${d.grade}\n${d.variable}\n${d.year}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\nGrade ${d.grade}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
       })
     ]
   });
