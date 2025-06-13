@@ -26,7 +26,7 @@ Massachusetts property tax law divides all taxable property into five distinct c
 Compare tax rates across municipalities over time by selecting locations and a property class below. The interactive chart helps visualize how different communities set their tax rates and how these rates have changed through the years.
 
 ```js
-const data = FileAttachment("./data/tax-rates.arrow").arrow()
+const data = FileAttachment("/data/tax-rates.arrow").arrow()
 ```
 
 ```js

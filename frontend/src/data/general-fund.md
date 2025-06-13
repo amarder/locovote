@@ -4,7 +4,7 @@ title: Revenues and Expenditures
 
 ```js
 import {sankey, sankeyLinkHorizontal} from "npm:d3-sankey@0.12"
-import {SankeyChart} from "./components/sankey.js"
+import {SankeyChart} from "../components/sankey.js"
 ```
 
 # Revenues and Expenditures
@@ -314,7 +314,7 @@ const safeNumber = (value) => {
 ```
 
 ```js
-const municipalities = FileAttachment("./data/general-fund.arrow").arrow().then(data => 
+const municipalities = FileAttachment("/data/general-fund.arrow").arrow().then(data => 
   Array.from(data).map(d => {
     const convertValue = (value) => {
       if (typeof value === 'bigint') {
