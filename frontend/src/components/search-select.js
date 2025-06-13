@@ -7,129 +7,241 @@ export function searchCheckbox(
     data, // An array of possible selectable options
     options
   ) {
+    // -------------------------------------------------------------
+    // Multi-Auto-Select implementation (inspired by
+    // https://observablehq.com/@john-guerra/multi-auto-select)
+    // -------------------------------------------------------------
     options = {
       value: [],
-      optionsCheckboxes: undefined, // use this if you want to pass specific options to the checkboxes or the search,
       format: (d) => d,
       optionsSearch: {
         format: () => "",
-        filter: fullSearchFilter // searches in the whole word
+        filter: fullSearchFilter // search across the whole word
       },
-      height: 300,
+      height: 250,
       debug: false,
-      ...options,    
+      urlParam: undefined, // name of the URL search parameter to sync (e.g., "municipalities")
+      ...options,
     };
-  
-    // To remove the label from the options for the checkboxes
-    function cloneIgnoring(obj, attrToIgnore) {
-      const { [attrToIgnore]: _, ...rest } = obj;
-      return rest;
+
+    const debug = options.debug;
+
+    // ------------------------------------
+    // URL parameter helpers (optional)
+    // ------------------------------------
+    const urlParamName = options.urlParam;
+
+    function readFromURL() {
+      if (!urlParamName) return [];
+      const params = new URLSearchParams(window.location.search);
+      const raw = params.get(urlParamName);
+      if (!raw) return [];
+      return raw.split(",").map(decodeURIComponent).filter((d) => data.includes(d));
     }
-  
-    
-    let debug = options.debug;
+
+    function writeToURL(values) {
+      if (!urlParamName) return;
+      const params = new URLSearchParams(window.location.search);
+      if (values.length) {
+        params.set(urlParamName, values.map(encodeURIComponent).join(","));
+      } else {
+        params.delete(urlParamName);
+      }
+      const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+      history.replaceState(null, "", newUrl);
+    }
+
+    // Coerce data to an array so we can mutate/filter easily
     data = Array.from(data);
-    // options.value = options.value === undefined ? [] : options.value;
-    let checkboxes = Inputs.checkbox(
-      data,
-      options.optionsCheckboxes || cloneIgnoring(options, "label")
-    );
+
+    // Maintain the current selection as an ordered array. If the caller didn't
+    // provide an explicit value (or it's empty), fall back to what we find in
+    // the URL search params.
+    const initialSelection =
+      options.value && options.value.length ? options.value : readFromURL();
+
+    let selected = Array.from(initialSelection);
+
+    /* ------------------------------------
+     * Core DOM elements
+     * ----------------------------------*/
     const search = Inputs.search(data, options.optionsSearch || options);
-    const btnAll = htl.html`<button>All</button>`;
-    const btnNone = htl.html`<button>Clear</button>`;
-  
-    let selected = new Map(Array.from(options.value).map((d) => [d, true]));
-  
+
+    // Small helper to quickly style inline elements
+    function css(node, styles) {
+      Object.assign(node.style, styles);
+      return node;
+    }
+
+    // Readable counter of selected items
+    const output = htl.html`<output style="font-size: 80%; font-style: italic; margin-left: -65px;"></output>`;
+
+    // Container for the selected tags
+    const tagList = css(htl.html`<div></div>`, {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "4px",
+      margin: "4px 0"
+    });
+
+    // Container for the suggestion list
+    const suggestions = css(htl.html`<div></div>`, {
+      position: "absolute",
+      left: "0",
+      top: "100%",
+      maxHeight: `${options.height}px`,
+      overflow: "auto",
+      border: "1px solid #ddd",
+      borderRadius: "4px",
+      width: "256px",
+      background: "#fff",
+      zIndex: 1000,
+      display: "none" // hidden until there are search results
+    });
+
+    // Wrapper to keep suggestions positioned relative to search input
+    const searchWrapper = css(htl.html`<div style="position:relative; width:256px;"></div>`, {});
+    searchWrapper.append(search, suggestions);
+
+    // Clear-all button (acts as the original "Clear")
+    const btnClear = htl.html`<button>Clear</button>`;
+
+    // Compose component root
+    const component = htl.html`${options.label ? htl.html`<label>${options.label}</label>` : ""}
+${tagList}
+<div style="display: flex; gap: 4px; align-items: center;">
+  ${searchWrapper}
+  ${output}
+</div>
+`;
+
+    /* ------------------------------------
+     * Helper functions
+     * ----------------------------------*/
+
+    // Ensure no duplicates inside selected list
+    function addSelection(d) {
+      if (!selected.includes(d)) selected.push(d);
+    }
+
+    function removeSelection(d) {
+      selected = selected.filter((x) => x !== d);
+    }
+
+    function setSelection(arr) {
+      selected = Array.from(arr || []);
+    }
+
+    function getSelection() {
+      return selected.slice(); // defensive copy
+    }
+
     function countSelected() {
-      return Array.from(selected.entries()).filter(([k, v]) => v).length;
+      return selected.length;
     }
-  
-    function changeSome(sel, changeTo) {
-      for (let o of sel) selected.set(o, changeTo);
+
+    // Update the `<output>` element with current stats
+    function updateOutput() {
+      output.innerHTML = `(${countSelected()} of ${data.length} selected)`;
     }
-  
-    function selectedFromArray(sel) {
-      changeSome(data, false);
-      changeSome(sel, true);
+
+    // Render the tag list (selected items)
+    function renderTags() {
+      tagList.innerHTML = "";
+      for (const d of selected) {
+        const tag = htl.html`<span style="display:inline-flex; align-items:center; background:#e0e0e0; border-radius:12px; padding:2px 6px; font-size:90%; color:#000;">
+          ${options.format(d)}
+          <button style="margin-left:4px; border:none; background:transparent; cursor:pointer; font-size: 12px; line-height: 12px; color:#000;">×</button>
+        </span>`;
+        tag.querySelector("button").addEventListener("click", () => {
+          removeSelection(d);
+          triggerChange();
+        });
+        tagList.appendChild(tag);
+      }
     }
-  
-    function selectedToArray() {
-      return Array.from(selected.entries())
-        .filter(([k, v]) => v)
-        .map(([k, v]) => k);
+
+    // Compute the current suggestion candidates (not already selected)
+    function currentCandidates() {
+      return (search.value || []).filter((d) => !selected.includes(d));
     }
-  
-    // HTML
-    let output = htl.html`<output style="font-size: 80%; font-style: italics">(${countSelected()} of ${
-      data.length
-    } selected)</output>`;
-    const component = htl.html`${
-      options.label ? htl.html`<label>${options.label}</label>` : ""
-    } 
-  
-    ${output}  
-    
-    <div style="display:flex">
-      ${search} 
-      <div> ${btnNone} </div>
-    </div>
-    
-    <div style="max-height: ${
-      options.height
-    }px; overflow: auto">${checkboxes}</div>`;
-  
-    // Update the display whenever the value changes
+
+    // Render the suggestion list under the search box
+    function renderSuggestions() {
+      suggestions.innerHTML = "";
+      const inputEl = search.querySelector("input") || search;
+      const queryText = (inputEl.value || "").trim();
+
+      // If the user hasn't typed anything, keep the suggestions hidden
+      if (!queryText) {
+        suggestions.style.display = "none";
+        return;
+      }
+
+      const candidates = currentCandidates();
+
+      if (!candidates.length) {
+        suggestions.style.display = "none";
+        return;
+      }
+
+      for (const d of candidates) {
+        const item = htl.html`<div style="cursor:pointer; padding:2px 6px; color:#000;">${options.format(d)}</div>`;
+        item.addEventListener("click", () => {
+          addSelection(d);
+          // Clear the search query to make UX smoother
+          const inputEl = search.querySelector("input") || search;
+          if (inputEl) {
+            inputEl.value = "";
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          suggestions.style.display = "none";
+          triggerChange();
+        });
+        suggestions.appendChild(item);
+      }
+
+      suggestions.style.display = "block";
+    }
+
+    // Central place to update everything & dispatch `input` events
+    function triggerChange() {
+      if (debug) console.log("searchCheckbox (multi-auto)", selected);
+      updateOutput();
+      renderTags();
+      renderSuggestions();
+      writeToURL(selected);
+      component.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    /* ------------------------------------
+     * Event listeners
+     * ----------------------------------*/
+    search.addEventListener("input", () => {
+      renderSuggestions();
+    });
+
+    btnClear.addEventListener("click", () => {
+      setSelection([]);
+      triggerChange();
+    });
+
+    /* ------------------------------------
+     * Expose reactive value
+     * ----------------------------------*/
     Object.defineProperty(component, "value", {
       get() {
-        return selectedToArray();
+        return getSelection();
       },
       set(v) {
-        selectedFromArray(v);
+        setSelection(v);
+        triggerChange();
       }
     });
-  
-    function updateValueFromSelected() {
-      checkboxes.value = selectedToArray();
-      if (debug) console.log("searchCheckboxes", checkboxes.value);
-      output.innerHTML = `(${countSelected()} of ${data.length} selected)`;
-      component.dispatchEvent(new Event("input", { bubbles: true }));
-  
-      // inocuous change to recompute layout. Necesary when the format funtion sets max-height for example
-      component.style.zIndex = 1;
-    }
-  
-    btnAll.addEventListener("click", () => {
-      changeSome(search.value, true);
-      updateValueFromSelected();
-    });
-    btnNone.addEventListener("click", () => {
-      changeSome(search.value, false);
-      updateValueFromSelected();
-    });
-  
-    component.value = selectedToArray();
-  
-    search.addEventListener("input", (evt) => {
-      // Hide all the checkboxes that aren't in the searchbox result
-      for (let check of checkboxes.querySelectorAll("input")) {
-        if (search.value.includes(data[+check.value])) {
-          check.parentElement.style.display = "inline-flex";
-        } else {
-          check.parentElement.style.display = "none";
-        }
-      }
-      // We don't really need to update when value when searching
-      // component.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  
-    checkboxes.addEventListener("input", (evt) => {
-      // avoids duplicated events
-      evt.stopPropagation();
-  
-      selectedFromArray(checkboxes.value);
-      updateValueFromSelected();
-    });
-  
+
+    // Initial rendering
+    triggerChange();
+
     return component;
   }
 

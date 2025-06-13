@@ -16,11 +16,7 @@ const names = [...new Set(data.map(d => d.Municipality))].sort();
 ```
 
 ```js
-const selected = view(searchCheckbox(names));
-```
-
-```js
-display(selected);
+const selected = view(searchCheckbox(names, { urlParam: "municipalities" }));
 ```
 
 ```js
