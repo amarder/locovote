@@ -7,7 +7,7 @@ def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_pat
     # Read the CSV file
     path = os.path.expanduser(input_path)
     combined = pd.read_csv(path, dtype={'ORG_CODE': str})
-    print(combined.head())
+    print(combined.head(1).T)
     combined = combined[combined['STU_GRP'] == 'All Students']
 
     # Verify unique identifiers
@@ -20,7 +20,8 @@ def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_pat
 
     # Process and transform the data
     output = combined[['SUBJECT_CODE', 'M_PLUS_E_CNT', 'E_CNT', 'STU_CNT', 
-                    'DIST_NAME', 'ORG_NAME', 'TEST_GRADE', 'SY', 'ORG_CODE']].copy()
+                    'DIST_NAME', 'ORG_NAME', 'TEST_GRADE', 'SY', 'ORG_CODE',
+                    'AVG_SGP', 'AVG_SGP_INCL']].copy()
 
     output = output.assign(
         year=output['SY'].astype(int),
@@ -28,11 +29,14 @@ def clean_mcas(input_path="../data/raw/MCAS_Achievement_Results.csv", output_pat
         n_me=output['M_PLUS_E_CNT'].astype(int),
         n_e=output['E_CNT'].astype(int),
         n=output['STU_CNT'].astype(int),
-        ORG_CODE=output['ORG_CODE'].astype(str)
+        ORG_CODE=output['ORG_CODE'].astype(str),
+        avg_sgp=pd.to_numeric(output['AVG_SGP'], errors='coerce'),
+        avg_sgp_incl=pd.to_numeric(output['AVG_SGP_INCL'], errors='coerce')
     )
 
     # Drop original columns
-    output = output.drop(['M_PLUS_E_CNT', 'E_CNT', 'STU_CNT', 'TEST_GRADE', 'SY'], axis=1)
+    output = output.drop(['M_PLUS_E_CNT', 'E_CNT', 'STU_CNT', 'TEST_GRADE', 'SY', 
+                         'AVG_SGP', 'AVG_SGP_INCL'], axis=1)
 
     # Write to SQLite database
     conn = sqlite3.connect(output_path)
