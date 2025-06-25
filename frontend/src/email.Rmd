@@ -1,10 +1,10 @@
 ---
-title: "Student Growth and District Demographics Analysis"
-author: "MCAS Data Analysis"
-date: "`r Sys.Date()`"
+title: ""
+author: ""
+date: ""
 format: 
   typst:
-    toc: true
+    toc: false
     number_sections: true
     highlight_style: github
     mainfont: "Arial"
@@ -17,12 +17,6 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
                      fig.width = 10, fig.height = 7, fig.align = "center",
                      out.width = "100%", dpi = 300)
 ```
-
-## Overview
-
-This analysis examines the relationship between district racial composition (proportion of white students) and student academic growth as measured by Student Growth Percentiles (SGP) on Massachusetts MCAS tests. We use weighted regression where each district is weighted by its total number of students.
-
-## Libraries and Data Loading
 
 ```{r libraries}
 library(RSQLite)
@@ -78,25 +72,26 @@ mcas_data <- mcas_data %>%
     prop_white <= 1
   )
 
-cat("Data loaded:", nrow(mcas_data), "observations\n")
-cat("Years:", min(mcas_data$year), "-", max(mcas_data$year), "\n")
-cat("Districts:", length(unique(mcas_data$district)), "\n")
-cat("Subjects:", paste(unique(mcas_data$subject), collapse = ", "), "\n")
+# cat("Data loaded:", nrow(mcas_data), "observations\n")
+# cat("Years:", min(mcas_data$year), "-", max(mcas_data$year), "\n")
+# cat("Districts:", length(unique(mcas_data$district)), "\n")
+# cat("Subjects:", paste(unique(mcas_data$subject), collapse = ", "), "\n")
 ```
-
-## Weighted Regression Analysis
 
 ```{r regression-analysis}
 # Function to run weighted regression with robust standard errors
 run_weighted_regression <- function(data) {
   if (nrow(data) < 3) return(NULL)
   
+  # Calculate normalized weights
+  normalized_weights <- data$total_n / sum(data$total_n) * nrow(data)
+  
   # Use estimatr::lm_robust for weighted regression with robust standard errors
   model <- lm_robust(avg_sgp ~ prop_white, 
                      data = data, 
                      weights = total_n,
-                     se_type = "HC2")  # Heteroskedasticity-consistent standard errors
-  
+                     se_type = "stata")
+
   # Extract coefficients
   coefs <- tidy(model)
   slope_row <- coefs[coefs$term == "prop_white", ]
@@ -123,23 +118,21 @@ regression_results <- mcas_data %>%
     significant = p_value < 0.05
   )
 
-cat("Regression results for", nrow(regression_results), "year-subject combinations\n")
+# cat("Regression results for", nrow(regression_results), "year-subject combinations\n")
 ```
 
-
-## Visualization
 
 ```{r main-plot, fig.width=6.5, fig.height=9}
 # Create the main scatter plot with facets
 p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
   geom_point(aes(size = total_n), alpha = 0.6, color = "#2563eb") +
-  geom_smooth(aes(weight = total_n), method = "lm", se = TRUE, color = "#dc2626", size = 1) +
+  geom_smooth(aes(weight = total_n), method = "lm", se = FALSE, color = "#dc2626", size = 1) +
   geom_hline(yintercept = 50, linetype = "dashed", color = "#666666", alpha = 0.7) +
   facet_grid(year ~ subject, labeller = labeller(subject = subject_labels)) +
-  scale_x_continuous(labels = percent_format(), name = "Proportion of White Students") +
+  scale_x_continuous(labels = percent_format(), name = "Proportion White") +
   scale_y_continuous(name = "Average Student Growth Percentile") +
   scale_size_continuous(name = "Number of Students", 
-                       range = c(0.05, 3),
+                       range = c(0.01, 2),
                        labels = comma_format()) +
   theme_minimal() +
   theme(
@@ -149,13 +142,16 @@ p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
     panel.grid.minor = element_blank()
   ) +
   labs(
-    title = "Student Growth vs. Proportion of White Students by Year and Subject",
+    title = "Student Growth vs. Proportion White by Year and Subject",
     subtitle = "Each point represents a school district, sized by number of students.\nRed lines show weighted regression trends."
   )
 
 print(p1)
-```
 
+# Save as PNG for email
+ggsave("student_growth_by_demographics.png", plot = p1, 
+       width = 6.5, height = 9, dpi = 300, units = "in", bg = "white")
+```
 
 ```{r slope-trends, fig.width=6.5, fig.height=4}
 # Plot slope estimates over time by subject with facet grid and error bars
@@ -185,4 +181,8 @@ p2 <- regression_results %>%
   )
 
 print(p2)
+
+# Save as PNG for email  
+ggsave("slope_trends_by_subject.png", plot = p2,
+       width = 6.5, height = 4, dpi = 300, units = "in", bg = "white")
 ```
