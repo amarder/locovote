@@ -126,48 +126,10 @@ regression_results <- mcas_data %>%
 cat("Regression results for", nrow(regression_results), "year-subject combinations\n")
 ```
 
-## Regression Results Table
-
-```{r results-table}
-# Create formatted table
-results_table <- regression_results %>%
-  ungroup() %>%  # Remove grouping to avoid column mismatch
-  select(year, subject_label, slope, std_error, t_stat, p_value, n_districts, total_students) %>%
-  mutate(
-    slope = round(slope, 3),
-    std_error = round(std_error, 3),
-    t_stat = round(t_stat, 2),
-    p_value = case_when(
-      p_value < 0.001 ~ "< 0.001",
-      p_value < 0.01 ~ "< 0.01", 
-      p_value < 0.05 ~ "< 0.05",
-      TRUE ~ as.character(round(p_value, 3))
-    ),
-    total_students = scales::comma(total_students)
-  )
-
-kable(results_table, 
-      col.names = c("Year", "Subject", "Slope", "Std Error", "t-stat", "p-value", "# Districts", "Total Students"),
-      caption = "Weighted Regression Results: Student Growth vs. Proportion White Students",
-      align = c("c", "l", "r", "r", "r", "r", "r", "r"))
-```
-
-## Key Findings
-
-```{r summary-stats}
-# Summary statistics
-avg_slope <- mean(regression_results$slope)
-significant_results <- sum(regression_results$significant)
-negative_slopes <- sum(regression_results$slope < 0)
-
-cat("Average slope across all year-subject combinations:", round(avg_slope, 3), "\n")
-cat("Statistically significant results (p < 0.05):", significant_results, "out of", nrow(regression_results), "\n")
-cat("Negative slope estimates:", negative_slopes, "out of", nrow(regression_results), "\n")
-```
 
 ## Visualization
 
-```{r main-plot, fig.width=12, fig.height=9}
+```{r main-plot, fig.width=6.5, fig.height=9}
 # Create the main scatter plot with facets
 p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
   geom_point(aes(size = total_n), alpha = 0.6, color = "#2563eb") +
@@ -176,8 +138,8 @@ p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
   facet_grid(year ~ subject, labeller = labeller(subject = subject_labels)) +
   scale_x_continuous(labels = percent_format(), name = "Proportion of White Students") +
   scale_y_continuous(name = "Average Student Growth Percentile") +
-  scale_size_continuous(name = "Total Students", 
-                       range = c(1, 8),
+  scale_size_continuous(name = "Number of Students", 
+                       range = c(0.05, 3),
                        labels = comma_format()) +
   theme_minimal() +
   theme(
@@ -188,86 +150,39 @@ p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
   ) +
   labs(
     title = "Student Growth vs. Proportion of White Students by Year and Subject",
-    subtitle = "Each point represents a school district, sized by number of students. Red lines show weighted regression trends.",
-    caption = "Data: Massachusetts MCAS. Districts weighted by student enrollment. Dashed line at 50th percentile (typical growth)."
+    subtitle = "Each point represents a school district, sized by number of students.\nRed lines show weighted regression trends."
   )
 
 print(p1)
 ```
 
-## Slope Trends Over Time
 
-```{r slope-trends, fig.width=10, fig.height=5}
-# Plot slope estimates over time by subject
-p2 <- ggplot(regression_results, aes(x = year, y = slope, color = subject_label)) +
-  geom_line(size = 1.2) +
-  geom_point(aes(size = total_students), alpha = 0.8) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.5) +
-  scale_color_brewer(type = "qual", palette = "Set1", name = "Subject") +
-  scale_size_continuous(name = "Total Students", 
-                       labels = comma_format(),
-                       range = c(2, 6)) +
+```{r slope-trends, fig.width=6.5, fig.height=4}
+# Plot slope estimates over time by subject with facet grid and error bars
+p2 <- regression_results %>%
+  ggplot(aes(x = year, y = slope)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.7, size = 0.8) +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high), 
+                width = 0.2, alpha = 0.6, color = "#2563eb") +
+  geom_point(color = "#2563eb", alpha = 0.8) +
+  facet_grid(. ~ subject_label) +
   scale_x_continuous(breaks = pretty_breaks()) +
   theme_minimal() +
   theme(
     legend.position = "bottom",
-    panel.grid.minor.x = element_blank()
+    panel.grid.minor.x = element_blank(),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.title = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11)
   ) +
   labs(
-    title = "Regression Slope Estimates Over Time",
-    subtitle = "Change in student growth percentile per unit increase in proportion white students",
+    title = "Regression Slope Estimates Over Time by Subject",
+    subtitle = "Change in student growth percentile per unit increase in proportion white students\nError bars show 95% confidence intervals",
     x = "Year",
     y = "Slope Estimate",
-    caption = "Points sized by total student enrollment across districts"
+    caption = "Districts weighted by student enrollment. Separate regressions for each year-subject combination."
   )
 
 print(p2)
 ```
-
-## Statistical Significance Over Time
-
-```{r significance-plot, fig.width=10, fig.height=5}
-# Plot significance over time
-p3 <- regression_results %>%
-  mutate(significance_level = case_when(
-    p_value < 0.001 ~ "p < 0.001",
-    p_value < 0.01 ~ "p < 0.01",
-    p_value < 0.05 ~ "p < 0.05",
-    TRUE ~ "p ≥ 0.05"
-  )) %>%
-  ggplot(aes(x = year, y = slope, color = significance_level, shape = subject_label)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.5) +
-  geom_point(size = 4, alpha = 0.8) +
-  scale_color_manual(
-    values = c("p < 0.001" = "#d73027", "p < 0.01" = "#fc8d59", 
-               "p < 0.05" = "#fee08b", "p ≥ 0.05" = "#999999"),
-    name = "Statistical Significance"
-  ) +
-  scale_shape_manual(values = c(16, 17, 15), name = "Subject") +
-  scale_x_continuous(breaks = pretty_breaks()) +
-  theme_minimal() +
-  theme(legend.position = "bottom") +
-  labs(
-    title = "Statistical Significance of Slope Estimates",
-    subtitle = "Relationship between proportion white students and student growth",
-    x = "Year",
-    y = "Slope Estimate",
-    caption = "Warmer colors indicate stronger statistical significance"
-  )
-
-print(p3)
-```
-
-## Interpretation
-
-The analysis reveals several key patterns:
-
-1. **Overall Relationship**: On average, there is a `r ifelse(avg_slope > 0, "positive", "negative")` relationship between the proportion of white students in a district and student growth percentiles.
-
-2. **Statistical Significance**: `r significant_results` out of `r nrow(regression_results)` year-subject combinations show statistically significant relationships (p < 0.05).
-
-3. **Variation by Subject and Year**: The strength and direction of the relationship varies across subjects and over time, suggesting complex underlying dynamics.
-
-4. **Weighting Impact**: By weighting districts by student enrollment, larger districts (which affect more students) have greater influence on the estimated relationships.
-
-**Note**: These are observational correlations and should not be interpreted as causal relationships. Many factors beyond racial composition influence student academic growth.
