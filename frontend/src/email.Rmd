@@ -1,0 +1,273 @@
+---
+title: "Student Growth and District Demographics Analysis"
+author: "MCAS Data Analysis"
+date: "`r Sys.Date()`"
+format: 
+  typst:
+    toc: true
+    number_sections: true
+    highlight_style: github
+    mainfont: "Arial"
+    fontsize: 11pt
+    geometry: "margin=1in"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, 
+                     fig.width = 10, fig.height = 7, fig.align = "center",
+                     out.width = "100%", dpi = 300)
+```
+
+## Overview
+
+This analysis examines the relationship between district racial composition (proportion of white students) and student academic growth as measured by Student Growth Percentiles (SGP) on Massachusetts MCAS tests. We use weighted regression where each district is weighted by its total number of students.
+
+## Libraries and Data Loading
+
+```{r libraries}
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(estimatr)  # for robust standard errors in weighted regression
+library(broom)
+library(knitr)
+library(tidyr)
+library(scales)
+
+# Subject labels for display
+subject_labels <- c("ELA" = "English", "MATH" = "Math", "SCI" = "Science")
+```
+
+```{r load-data}
+# Connect to SQLite database
+con <- dbConnect(SQLite(), "../../data/processed/mcas.db")
+
+# Read MCAS data
+query <- "
+  SELECT 
+    DIST_NAME as district,
+    year,
+    SUBJECT_CODE as subject,
+    AVG(avg_sgp) as avg_sgp,
+    SUM(n_white) as total_n_white,
+    SUM(n) as total_n,
+    CASE 
+      WHEN SUM(n) > 0 THEN CAST(SUM(n_white) AS FLOAT) / SUM(n)
+      ELSE NULL 
+    END as prop_white
+  FROM mcas 
+  WHERE SUBSTR(ORG_CODE, -4) = '0000' 
+    AND avg_sgp IS NOT NULL
+    AND n > 0
+    AND n_white IS NOT NULL
+    AND DIST_NAME != 'State'
+  GROUP BY DIST_NAME, year, SUBJECT_CODE
+  HAVING SUM(n) > 100
+  ORDER BY district, year, subject
+"
+
+mcas_data <- dbGetQuery(con, query)
+dbDisconnect(con)
+
+# Filter out null values and ensure reasonable bounds
+mcas_data <- mcas_data %>%
+  filter(
+    !is.na(avg_sgp),
+    !is.na(prop_white),
+    prop_white >= 0,
+    prop_white <= 1
+  )
+
+cat("Data loaded:", nrow(mcas_data), "observations\n")
+cat("Years:", min(mcas_data$year), "-", max(mcas_data$year), "\n")
+cat("Districts:", length(unique(mcas_data$district)), "\n")
+cat("Subjects:", paste(unique(mcas_data$subject), collapse = ", "), "\n")
+```
+
+## Weighted Regression Analysis
+
+```{r regression-analysis}
+# Function to run weighted regression with robust standard errors
+run_weighted_regression <- function(data) {
+  if (nrow(data) < 3) return(NULL)
+  
+  # Use estimatr::lm_robust for weighted regression with robust standard errors
+  model <- lm_robust(avg_sgp ~ prop_white, 
+                     data = data, 
+                     weights = total_n,
+                     se_type = "HC2")  # Heteroskedasticity-consistent standard errors
+  
+  # Extract coefficients
+  coefs <- tidy(model)
+  slope_row <- coefs[coefs$term == "prop_white", ]
+  
+  return(data.frame(
+    slope = slope_row$estimate,
+    std_error = slope_row$std.error,
+    t_stat = slope_row$statistic,
+    p_value = slope_row$p.value,
+    conf_low = slope_row$conf.low,
+    conf_high = slope_row$conf.high,
+    n_districts = nrow(data),
+    total_students = sum(data$total_n)
+  ))
+}
+
+# Run regressions for each year-subject combination
+regression_results <- mcas_data %>%
+  group_by(year, subject) %>%
+  do(run_weighted_regression(.)) %>%
+  filter(!is.na(slope)) %>%
+  mutate(
+    subject_label = recode(subject, !!!subject_labels),
+    significant = p_value < 0.05
+  )
+
+cat("Regression results for", nrow(regression_results), "year-subject combinations\n")
+```
+
+## Regression Results Table
+
+```{r results-table}
+# Create formatted table
+results_table <- regression_results %>%
+  ungroup() %>%  # Remove grouping to avoid column mismatch
+  select(year, subject_label, slope, std_error, t_stat, p_value, n_districts, total_students) %>%
+  mutate(
+    slope = round(slope, 3),
+    std_error = round(std_error, 3),
+    t_stat = round(t_stat, 2),
+    p_value = case_when(
+      p_value < 0.001 ~ "< 0.001",
+      p_value < 0.01 ~ "< 0.01", 
+      p_value < 0.05 ~ "< 0.05",
+      TRUE ~ as.character(round(p_value, 3))
+    ),
+    total_students = scales::comma(total_students)
+  )
+
+kable(results_table, 
+      col.names = c("Year", "Subject", "Slope", "Std Error", "t-stat", "p-value", "# Districts", "Total Students"),
+      caption = "Weighted Regression Results: Student Growth vs. Proportion White Students",
+      align = c("c", "l", "r", "r", "r", "r", "r", "r"))
+```
+
+## Key Findings
+
+```{r summary-stats}
+# Summary statistics
+avg_slope <- mean(regression_results$slope)
+significant_results <- sum(regression_results$significant)
+negative_slopes <- sum(regression_results$slope < 0)
+
+cat("Average slope across all year-subject combinations:", round(avg_slope, 3), "\n")
+cat("Statistically significant results (p < 0.05):", significant_results, "out of", nrow(regression_results), "\n")
+cat("Negative slope estimates:", negative_slopes, "out of", nrow(regression_results), "\n")
+```
+
+## Visualization
+
+```{r main-plot, fig.width=12, fig.height=9}
+# Create the main scatter plot with facets
+p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
+  geom_point(aes(size = total_n), alpha = 0.6, color = "#2563eb") +
+  geom_smooth(aes(weight = total_n), method = "lm", se = TRUE, color = "#dc2626", size = 1) +
+  geom_hline(yintercept = 50, linetype = "dashed", color = "#666666", alpha = 0.7) +
+  facet_grid(year ~ subject, labeller = labeller(subject = subject_labels)) +
+  scale_x_continuous(labels = percent_format(), name = "Proportion of White Students") +
+  scale_y_continuous(name = "Average Student Growth Percentile") +
+  scale_size_continuous(name = "Total Students", 
+                       range = c(1, 8),
+                       labels = comma_format()) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 11, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "Student Growth vs. Proportion of White Students by Year and Subject",
+    subtitle = "Each point represents a school district, sized by number of students. Red lines show weighted regression trends.",
+    caption = "Data: Massachusetts MCAS. Districts weighted by student enrollment. Dashed line at 50th percentile (typical growth)."
+  )
+
+print(p1)
+```
+
+## Slope Trends Over Time
+
+```{r slope-trends, fig.width=10, fig.height=5}
+# Plot slope estimates over time by subject
+p2 <- ggplot(regression_results, aes(x = year, y = slope, color = subject_label)) +
+  geom_line(size = 1.2) +
+  geom_point(aes(size = total_students), alpha = 0.8) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.5) +
+  scale_color_brewer(type = "qual", palette = "Set1", name = "Subject") +
+  scale_size_continuous(name = "Total Students", 
+                       labels = comma_format(),
+                       range = c(2, 6)) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor.x = element_blank()
+  ) +
+  labs(
+    title = "Regression Slope Estimates Over Time",
+    subtitle = "Change in student growth percentile per unit increase in proportion white students",
+    x = "Year",
+    y = "Slope Estimate",
+    caption = "Points sized by total student enrollment across districts"
+  )
+
+print(p2)
+```
+
+## Statistical Significance Over Time
+
+```{r significance-plot, fig.width=10, fig.height=5}
+# Plot significance over time
+p3 <- regression_results %>%
+  mutate(significance_level = case_when(
+    p_value < 0.001 ~ "p < 0.001",
+    p_value < 0.01 ~ "p < 0.01",
+    p_value < 0.05 ~ "p < 0.05",
+    TRUE ~ "p ≥ 0.05"
+  )) %>%
+  ggplot(aes(x = year, y = slope, color = significance_level, shape = subject_label)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.5) +
+  geom_point(size = 4, alpha = 0.8) +
+  scale_color_manual(
+    values = c("p < 0.001" = "#d73027", "p < 0.01" = "#fc8d59", 
+               "p < 0.05" = "#fee08b", "p ≥ 0.05" = "#999999"),
+    name = "Statistical Significance"
+  ) +
+  scale_shape_manual(values = c(16, 17, 15), name = "Subject") +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "Statistical Significance of Slope Estimates",
+    subtitle = "Relationship between proportion white students and student growth",
+    x = "Year",
+    y = "Slope Estimate",
+    caption = "Warmer colors indicate stronger statistical significance"
+  )
+
+print(p3)
+```
+
+## Interpretation
+
+The analysis reveals several key patterns:
+
+1. **Overall Relationship**: On average, there is a `r ifelse(avg_slope > 0, "positive", "negative")` relationship between the proportion of white students in a district and student growth percentiles.
+
+2. **Statistical Significance**: `r significant_results` out of `r nrow(regression_results)` year-subject combinations show statistically significant relationships (p < 0.05).
+
+3. **Variation by Subject and Year**: The strength and direction of the relationship varies across subjects and over time, suggesting complex underlying dynamics.
+
+4. **Weighting Impact**: By weighting districts by student enrollment, larger districts (which affect more students) have greater influence on the estimated relationships.
+
+**Note**: These are observational correlations and should not be interpreted as causal relationships. Many factors beyond racial composition influence student academic growth.
