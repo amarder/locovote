@@ -61,11 +61,25 @@ function getInTextCitation(id, style = 'apa') {
 
 # Methodology
 
-&nbsp;
+<div class="tip" label="Key Question">
 
-## Student Growth vs. District Demographics
+- **How should we measure school quality?**
 
-This analysis explores the relationship between district racial composition and student growth performance. Each point represents a school district, with the x-axis showing the proportion of white students and the y-axis showing average student growth percentile, broken down by year and subject.
+</div>
+
+## Research
+
+Locovote prioritizes school quality measures based on research from [Race and the Mismeasure of School Quality](https://doi.org/10.1257/aeri.20220292), which found that traditional ratings reflect student demographics rather than actual school effectiveness. The study analyzed randomized school assignment data and discovered that schools enrolling more White students aren't actually better at educating students—they just appear better due to selection bias.
+
+**1. Race-Balanced Progress** - Student growth measures with racial bias statistically removed through regression adjustment. This approach eliminates demographic bias while actually improving predictive accuracy of true school quality. Research shows these ratings predict school effectiveness 20% better than unadjusted measures.
+
+**2. Test Score Progress** - Student growth percentiles that measure year-over-year improvement, focusing on how much schools contribute to learning rather than student backgrounds. Progress ratings have 10-15 times higher accuracy than achievement levels and are much less correlated with school demographics.
+
+**3. Test Score Levels** - Traditional proficiency ratings (percentage scoring "proficient") that are heavily influenced by student demographics rather than school quality. These show extremely high racial correlation (0.70-0.85) and poor predictive accuracy, essentially measuring neighborhood characteristics rather than educational effectiveness.
+
+## Data
+
+The figure below explores the relationship between district racial composition and student growth performance. Each point represents a school district, with the x-axis showing the proportion of white students and the y-axis showing average student growth percentile, broken down by year and subject.
 
 ```js
 async function createDemographicsGrowthData() {
@@ -201,9 +215,7 @@ async function createDemographicsGrowthChart() {
 
 <div class="card">${await createDemographicsGrowthChart()}</div>
 
-## Regression Slope Estimates Over Time
-
-This chart shows how the relationship between district racial composition and student growth has changed over time. Each point represents the slope estimate for a given year and subject, with error bars showing 95% confidence intervals. A negative slope indicates that districts with higher proportions of white students tend to have lower growth percentiles, while a positive slope indicates the opposite.
+The next chart shows how the relationship between district racial composition and student growth has changed over time. Each point represents the slope estimate for a given year and subject, with error bars showing 95% confidence intervals. A negative slope indicates that districts with higher proportions of white students tend to have lower growth percentiles, while a positive slope indicates the opposite.
 
 ```js
 async function createSlopeEstimatesChart() {
@@ -332,7 +344,7 @@ const academicCitations = new Cite();
 // Add citations using different methods
 await academicCitations.addAsync([
   // Method 1: Using DOI (automatically fetches metadata)
-  "10.1257/aeri.20220292",
+  "10.1257/aeri.20220292", // Angrist et al. "Race and the Mismeasure of School Quality"
   "10.1016/bs.hesedu.2023.03.001",
 ]);
 ```
@@ -352,9 +364,6 @@ const inTextCitations = academicCitations.get().map((entry, index) => {
 });
 ```
 
-Student achievement gaps have been extensively documented ${inTextCitations[0]?.text}.
-
-
 ```js
 // You can also format in different styles
 const chicagoBibliography = academicCitations.format('bibliography', {
@@ -367,7 +376,5 @@ const chicagoBibliography = academicCitations.format('bibliography', {
 const bibliographyElement = html`<div class="bibliography-container"></div>`;
 bibliographyElement.innerHTML = chicagoBibliography;
 ```
-
----
 
 ${bibliographyElement}
