@@ -6,6 +6,10 @@ toc: true
 ```js
 import * as Plot from "npm:@observablehq/plot";
 import SQLite from "npm:@observablehq/sqlite";
+import {Cite} from "npm:@citation-js/core";
+import "npm:@citation-js/plugin-doi";
+import "npm:@citation-js/plugin-bibtex";
+import "npm:@citation-js/plugin-csl";
 ```
 
 ```js
@@ -17,7 +21,47 @@ const db = FileAttachment("data/mcas.db").sqlite();
 const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
 ```
 
+```js
+// Citation examples and helper functions
+const citations = new Cite();
+
+// Add citations using DOIs, URLs, or BibTeX
+const exampleCitations = [
+  "10.1080/19345747.2015.1086915", // DOI example
+  // You can also add BibTeX entries directly:
+  `@article{reardon2016,
+    title={School district socioeconomic status, race, and academic achievement},
+    author={Reardon, Sean F and Kalogrides, Demetra and Shores, Kenneth},
+    journal={American Educational Research Journal},
+    volume={53},
+    number={4},
+    pages={1036--1073},
+    year={2016}
+  }`
+];
+
+// Function to generate formatted citations
+function formatCitations(citationStyle = 'apa') {
+  return citations.format('bibliography', {
+    format: 'html',
+    template: citationStyle,
+    lang: 'en-US'
+  });
+}
+
+// Function to get in-text citation
+function getInTextCitation(id, style = 'apa') {
+  return citations.format('citation', {
+    format: 'text',
+    template: style,
+    entry: [id]
+  });
+}
+```
+
 # Methodology
+
+&nbsp;
 
 ## Student Growth vs. District Demographics
 
@@ -94,8 +138,6 @@ function calculateWeightedLinearRegression(data, xKey, yKey, weightKey) {
 }
 ```
 
-
-
 ```js
 async function createDemographicsGrowthChart() {
   const data = await createDemographicsGrowthData();
@@ -159,7 +201,7 @@ async function createDemographicsGrowthChart() {
 
 <div class="card">${await createDemographicsGrowthChart()}</div>
 
-### Regression Slope Estimates Over Time
+## Regression Slope Estimates Over Time
 
 This chart shows how the relationship between district racial composition and student growth has changed over time. Each point represents the slope estimate for a given year and subject, with error bars showing 95% confidence intervals. A negative slope indicates that districts with higher proportions of white students tend to have lower growth percentiles, while a positive slope indicates the opposite.
 
@@ -278,3 +320,54 @@ async function createSlopeEstimatesChart() {
 ```
 
 <div class="card">${await createSlopeEstimatesChart()}</div>
+
+
+## References
+
+
+```js
+// Create a citation manager
+const academicCitations = new Cite();
+
+// Add citations using different methods
+await academicCitations.addAsync([
+  // Method 1: Using DOI (automatically fetches metadata)
+  "10.1257/aeri.20220292",
+  "10.1016/bs.hesedu.2023.03.001",
+]);
+```
+
+```js
+// Get in-text citations
+const inTextCitations = academicCitations.get().map((entry, index) => {
+  const citation = new Cite(entry);
+  return {
+    id: index,
+    text: citation.format('citation', {
+      format: 'text',
+      template: 'chicago-author-date'
+    }),
+    title: entry.title || 'Untitled'
+  };
+});
+```
+
+Student achievement gaps have been extensively documented ${inTextCitations[0]?.text}.
+
+
+```js
+// You can also format in different styles
+const chicagoBibliography = academicCitations.format('bibliography', {
+  format: 'html',
+  template: 'chicago-author-date',
+  lang: 'en-US'
+});
+
+// Create element and set innerHTML to properly render Citation.js HTML
+const bibliographyElement = html`<div class="bibliography-container"></div>`;
+bibliographyElement.innerHTML = chicagoBibliography;
+```
+
+---
+
+${bibliographyElement}
