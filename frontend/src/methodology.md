@@ -12,6 +12,24 @@ import "npm:@citation-js/plugin-bibtex";
 import "npm:@citation-js/plugin-csl";
 ```
 
+```html
+<style>
+.bibliography-container .csl-bib-body {
+  line-height: 1.6;
+}
+
+.bibliography-container .csl-entry {
+  margin-bottom: 1em;
+  padding-left: 2em;
+  text-indent: -2em;
+}
+
+.bibliography-container .csl-entry:last-child {
+  margin-bottom: 0;
+}
+</style>
+```
+
 ```js
 const db = FileAttachment("data/mcas.db").sqlite();
 ```
