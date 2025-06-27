@@ -81,7 +81,7 @@ function getInTextCitation(id, style = 'apa') {
 
 <div class="tip" label="Key Question">
 
-- **How should we measure school quality?**
+**How should we measure school quality (with publicly available data)?**
 
 </div>
 
@@ -89,15 +89,27 @@ function getInTextCitation(id, style = 'apa') {
 
 Locovote prioritizes school quality measures based on research from [Race and the Mismeasure of School Quality](https://doi.org/10.1257/aeri.20220292), which found that traditional ratings reflect student demographics rather than actual school effectiveness. The study analyzed randomized school assignment data and discovered that schools enrolling more White students aren't actually better at educating students—they just appear better due to selection bias.
 
-**1. Race-Balanced Progress** - Student growth measures with racial bias statistically removed through regression adjustment. This approach eliminates demographic bias while actually improving predictive accuracy of true school quality. Research shows these ratings predict school effectiveness 20% better than unadjusted measures.
+Here are the measures we consider in reverse-order of importance:
 
-**2. Test Score Progress** - Student growth percentiles that measure year-over-year improvement, focusing on how much schools contribute to learning rather than student backgrounds. Progress ratings have 10-15 times higher accuracy than achievement levels and are much less correlated with school demographics.
+1. **Test Score Levels** - Traditional proficiency ratings (percentage scoring "proficient") that are heavily influenced by student demographics rather than school quality. These show extremely high racial correlation and poor predictive accuracy, essentially measuring neighborhood characteristics rather than educational effectiveness.
 
-**3. Test Score Levels** - Traditional proficiency ratings (percentage scoring "proficient") that are heavily influenced by student demographics rather than school quality. These show extremely high racial correlation (0.70-0.85) and poor predictive accuracy, essentially measuring neighborhood characteristics rather than educational effectiveness.
+2. **Test Score Progress** - Student growth percentiles that measure year-over-year improvement, focusing on how much schools contribute to learning rather than student backgrounds. Progress ratings have higher accuracy than achievement levels and are much less correlated with school demographics.
+
+3. **Race-Balanced Progress** - Student growth measures with racial bias statistically removed through regression adjustment. This approach eliminates demographic bias while actually improving predictive accuracy of true school quality.
+
+<div class="warning" label="Open Research Question">
+
+**Do the findings in ${inTextCitations[0].text} extend to making comparisons across school districts?**
+
+The findings in their paper were specific to New York City and Denver (large urban districts). It's possible that applying their findings to compare districts is a mistake. I would suggest looking at both race-balanced progress and test score progress measures. Locovote includes test score levels so users can see those traditional measures, but they are not good measures of school quality.
+
+</div>
+
+If you're interested in reading more about the research, a copy of their paper is available [here](https://economics.mit.edu/sites/default/files/2025-02/angrist-et-al-2024-race-and-the-mismeasure-of-school-quality.pdf).
 
 ## Data
 
-The figure below explores the relationship between district racial composition and student growth performance. Each point represents a school district, with the x-axis showing the proportion of white students and the y-axis showing average student growth percentile, broken down by year and subject.
+The figure below explores the relationship between district racial composition and test score progress. Each point represents a school district, with the x-axis showing the proportion of White students and the y-axis showing average student growth percentile, broken down by year and subject.
 
 ```js
 async function createDemographicsGrowthData() {
@@ -181,11 +193,11 @@ async function createDemographicsGrowthChart() {
   }
   
   return Plot.plot({
-    title: "Student Growth vs. Proportion of White Students by Year and Subject",
+    title: "Test Score Progress vs. Share White by Year and Subject",
     width: 830,
     height: 1600,
     x: {
-      label: "Proportion of White Students",
+      label: "Share White",
       domain: [0, 1],
       tickFormat: d => `${Math.round(d * 100)}%`
     },
@@ -200,24 +212,18 @@ async function createDemographicsGrowthChart() {
       label: null
     },
     fx: {
-      label: "Subject",
+      label: "",
       tickFormat: d => subjectLabels[d] || d
     },
     fy: {
-      label: "Year"
+      label: "",
+      tickFormat: d => d.toString()
     },
     r: {
       range: [1, 8]  // Smaller range for point sizes
     },
     marks: [
       Plot.frame(),
-      Plot.linearRegressionY(data, {
-        x: "prop_white",
-        y: "avg_sgp",
-        stroke: "#dc2626",
-        strokeWidth: 2,
-        strokeOpacity: 0.8
-      }),
       Plot.dot(data, {
         x: "prop_white",
         y: "avg_sgp",
@@ -225,7 +231,15 @@ async function createDemographicsGrowthChart() {
         fillOpacity: 0.6,
         r: "total_n",
         title: d => `${d.district}\n${d.year} ${subjectLabels[d.subject] || d.subject}\nWhite students: ${Math.round(d.prop_white * 100)}%\nGrowth percentile: ${d.avg_sgp?.toFixed(1)}\nTotal students: ${d.total_n?.toLocaleString()}`
-      })
+      }),
+      Plot.linearRegressionY(data, {
+        x: "prop_white",
+        y: "avg_sgp",
+        stroke: "#dc2626",
+        strokeWidth: 2,
+        strokeOpacity: 0.8,
+        ci: 0
+      }),
     ]
   });
 }
@@ -233,7 +247,7 @@ async function createDemographicsGrowthChart() {
 
 <div class="card">${await createDemographicsGrowthChart()}</div>
 
-The next chart shows how the relationship between district racial composition and student growth has changed over time. Each point represents the slope estimate for a given year and subject, with error bars showing 95% confidence intervals. A negative slope indicates that districts with higher proportions of white students tend to have lower growth percentiles, while a positive slope indicates the opposite.
+The next chart shows how the relationship between district racial composition and student growth has changed over time. Each point represents the slope estimate for a given year and subject, with error bars showing 95% confidence intervals.
 
 ```js
 async function createSlopeEstimatesChart() {
@@ -287,7 +301,7 @@ async function createSlopeEstimatesChart() {
   // display(regressionStats);
   
   return Plot.plot({
-    title: "Regression Slope Estimates: Student Growth vs. Proportion White Students",
+    title: "Regression Estimates: Test Score Progress vs. Share White",
           width: 830,
       height: 400,
       insetTop: 2,
@@ -316,11 +330,8 @@ async function createSlopeEstimatesChart() {
       x: "subject"
     },
     fx: {
-      label: "Subject",
+      label: "",
       tickFormat: d => subjectLabels[d] || d
-    },
-    color: {
-      scheme: "category10"
     },
     marks: [
       Plot.frame(),
@@ -330,7 +341,7 @@ async function createSlopeEstimatesChart() {
           x: "year",
           y1: "ci_lower",
           y2: "ci_upper",
-          stroke: "subject",
+          // stroke: "subject",
           strokeWidth: 2,
           strokeOpacity: 0.6
         }),
@@ -338,8 +349,8 @@ async function createSlopeEstimatesChart() {
       Plot.dot(regressionStats, {
         x: "year",
         y: "slope",
-        fill: "subject",
-        stroke: "white",
+        fill: "white",
+        // stroke: "white",
         strokeWidth: 1,
         r: 4,
         title: d => `${d.subject_label} ${d.year}\nSlope: ${d.slope?.toFixed(3)}\n95% CI: [${d.ci_lower?.toFixed(3)}, ${d.ci_upper?.toFixed(3)}]\nStd Error: ${d.standard_error?.toFixed(3)}\n${d.n_districts} districts, ${d.total_students?.toLocaleString()} students`
@@ -351,6 +362,9 @@ async function createSlopeEstimatesChart() {
 
 <div class="card">${await createSlopeEstimatesChart()}</div>
 
+The dataset comes from [here](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). The following quote about student growth percentile adds some useful context to the above graph.
+
+> "Student growth percentile (AVG_SGP) was calculated as a median for 2017. In 2018 and onward, it is a mean. In 2021, a baseline SGP method was used to compare growth from 2019 to 2021, following the COVID-19 pandemic. For all other years, a cohort referenced model is used. For more information on SGP calculations, please see the [Student Growth page](https://www.doe.mass.edu/mcas/growth) on DESE's website."
 
 ## References
 
