@@ -87,21 +87,21 @@ function getInTextCitation(id, style = 'apa') {
 
 ## Research
 
-Locovote prioritizes school quality measures based on research from [Race and the Mismeasure of School Quality](https://doi.org/10.1257/aeri.20220292), which found that traditional ratings reflect student demographics rather than actual school effectiveness. The study analyzed randomized school assignment data and discovered that schools enrolling more White students aren't actually better at educating students—they just appear better due to selection bias.
+Locovote ranks school-quality measures according to insights from [“Race and the Mismeasure of School Quality”](https://doi.org/10.1257/aeri.20220292). That study shows that traditional ratings echo student demographics more than actual school effectiveness. Using randomized school-assignment data, the authors found that schools enrolling higher shares of White students are not inherently better at educating children, they only appear so because of selection bias.
 
 Here are the measures we consider in reverse-order of importance:
 
-1. **Test Score Levels** - Traditional proficiency ratings (percentage scoring "proficient") that are heavily influenced by student demographics rather than school quality. These show extremely high racial correlation and poor predictive accuracy, essentially measuring neighborhood characteristics rather than educational effectiveness.
+1. **Test score levels:** Traditional proficiency ratings, specifically the share of students scoring "proficient", are heavily influenced by student demographics, not by school quality. They exhibit strong racial correlations and poor predictive accuracy, essentially measuring neighborhood characteristics rather than educational effectiveness.
 
-2. **Test Score Progress** - Student growth percentiles that measure year-over-year improvement, focusing on how much schools contribute to learning rather than student backgrounds. Progress ratings have higher accuracy than achievement levels and are much less correlated with school demographics.
+2. **Test score progress:** Student Growth Percentiles (SGPs) measure year-over-year improvement, capturing how much schools contribute to learning independently of students' backgrounds. These progress ratings are more accurate than achievement levels and are far less correlated with demographics.
 
-3. **Race-Balanced Progress** - Student growth measures with racial bias statistically removed through regression adjustment. This approach eliminates demographic bias while actually improving predictive accuracy of true school quality.
+3. **Race-balanced progress:** Student growth measures in which racial bias is statistically removed through regression adjustment. This approach removes demographic bias while simultaneously improving the predictive accuracy of true school quality.
 
 <div class="warning" label="Open Research Question">
 
 **Do the findings in ${inTextCitations[0].text} extend to making comparisons across school districts?**
 
-The findings in their paper were specific to New York City and Denver (large urban districts). It's possible that applying their findings to compare districts is a mistake. I would suggest looking at both race-balanced progress and test score progress measures. Locovote includes test score levels so users can see those traditional measures, but they are not good measures of school quality.
+The findings in their paper were specific to New York City and Denver, two large urban districts. It is possible that applying their conclusions to comparisons across districts may not be appropriate. I suggest considering both race-balanced progress and test score progress measures. Locovote includes test score levels so users can view these traditional measures, but they are not good indicators of school quality.
 
 </div>
 
@@ -109,7 +109,7 @@ If you're interested in reading more about the research, a copy of their paper i
 
 ## Data
 
-The figure below explores the relationship between district racial composition and test score progress. Each point represents a school district, with the x-axis showing the proportion of White students and the y-axis showing average student growth percentile, broken down by year and subject.
+The figure below examines the relationship between a district's racial composition and test-score progress. Each point represents a school district; the x-axis shows the proportion of White students, and the y-axis shows the average Student Growth Percentile. The size of each point reflects the number of students in that school district.
 
 ```js
 async function createDemographicsGrowthData() {
@@ -247,7 +247,7 @@ async function createDemographicsGrowthChart() {
 
 <div class="card">${await createDemographicsGrowthChart()}</div>
 
-The next chart shows how the relationship between district racial composition and student growth has changed over time. Each point represents the slope estimate for a given year and subject, with error bars showing 95% confidence intervals.
+The next chart illustrates how the relationship between test score progress and demographics has evolved over time. Each point is the slope estimate for a given year and subject, error bars denote 95% confidence intervals.
 
 ```js
 async function createSlopeEstimatesChart() {
@@ -362,7 +362,7 @@ async function createSlopeEstimatesChart() {
 
 <div class="card">${await createSlopeEstimatesChart()}</div>
 
-The dataset comes from [here](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). The following quote about student growth percentile adds some useful context to the above graph.
+The data are sourced from [this dataset](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). The quotation below provides additional context for interpreting trends in the slope estimates presented in the graph above.
 
 > "Student growth percentile (AVG_SGP) was calculated as a median for 2017. In 2018 and onward, it is a mean. In 2021, a baseline SGP method was used to compare growth from 2019 to 2021, following the COVID-19 pandemic. For all other years, a cohort referenced model is used. For more information on SGP calculations, please see the [Student Growth page](https://www.doe.mass.edu/mcas/growth) on DESE's website."
 
