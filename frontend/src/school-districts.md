@@ -1,23 +1,23 @@
 ---
-title: Compare School Districts
+title: Compare School Districts - Student Growth
 toc: true
 ---
 
-# Compare School Districts
+# Compare School Districts - Student Growth
 
-This tool allows you to compare the academic performance of different Massachusetts school districts over time. Use the search box below to select districts and explore how they differ in MCAS test results across subjects, grades, and years.
+This tool allows you to compare the academic **growth** of different Massachusetts school districts over time. Use the search box below to select districts and explore how they differ in Student Growth Percentiles (SGP) across subjects, grades, and years.
 
 <div class="tip" label="Key Questions This Tool Answers">
 
-- **How do different districts compare academically?** See performance trends across multiple districts.
-- **How does performance vary by subject?** Compare districts in English, Math, and Science.
-- **Are there grade-level differences?** Analyze performance patterns across elementary, middle, and high school grades.
+- **How do different districts compare in student growth?** See growth trends across multiple districts.
+- **How does growth vary by subject?** Compare districts in English, Math, and Science growth rates.
+- **Are there grade-level differences?** Analyze growth patterns across elementary, middle, and high school grades.
 
 </div>
 
 ### Select School Districts to Compare
 
-Choose multiple school districts to compare their MCAS performance. Popular comparisons include neighboring districts, similar-sized districts, or districts you're considering for your family.
+Choose multiple school districts to compare their MCAS Student Growth Percentiles. Popular comparisons include neighboring districts, similar-sized districts, or districts you're considering for your family.
 
 ```js
 import {searchCheckbox} from "./components/search-select.js"
@@ -44,9 +44,9 @@ const selected = view(searchCheckbox(districtNames, { urlParam: "q", value: ["Bo
 const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
 ```
 
-## Overall Performance
+## Overall Growth Performance
 
-This table shows the overall MCAS performance for each selected school district, aggregated across all years, grades, and subjects in the dataset.
+This table shows the average Student Growth Percentile for each selected school district, aggregated across all years, grades, and subjects in the dataset.
 
 ```js
 async function createDistrictComparisonTable() {
@@ -61,12 +61,14 @@ async function createDistrictComparisonTable() {
   const query = `
     SELECT 
       DIST_NAME as district,
-      100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
-      100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding,
+      SUM(avg_sgp * avg_sgp_incl) / SUM(avg_sgp_incl) as avg_student_growth,
+      SUM(avg_sgp_incl) as data_points,
       SUM(n) as total_tests
     FROM mcas 
     WHERE SUBSTR(ORG_CODE, -4) = '0000' 
       AND DIST_NAME IN (${districtList})
+      AND avg_sgp IS NOT NULL
+      AND avg_sgp_incl > 0
       AND n > 0
     GROUP BY DIST_NAME
     ORDER BY DIST_NAME
@@ -80,22 +82,22 @@ async function createDistrictComparisonTable() {
   ).filter(d => d !== undefined);
   
   return Inputs.table(orderedData, {
-    columns: ["district", "pct_meeting_or_exceeding", "pct_exceeding", "total_tests"],
+    columns: ["district", "avg_student_growth", "data_points", "total_tests"],
     header: {
       "district": "School District", 
-      "pct_meeting_or_exceeding": "Meeting or Exceeding (%)", 
-      "pct_exceeding": "Exceeding (%)", 
+      "avg_student_growth": "Avg Growth Percentile", 
+      "data_points": "Data Points",
       "total_tests": "# Tests"
     },
     format: {
-      pct_meeting_or_exceeding: (x) => x.toFixed(1), 
-      pct_exceeding: (x) => x.toFixed(1),
+      avg_student_growth: (x) => x?.toFixed(1) || "N/A", 
+      data_points: (x) => x.toLocaleString(),
       total_tests: (x) => x.toLocaleString()
     },
     width: {
       district: 200,
-      pct_meeting_or_exceeding: 120,
-      pct_exceeding: 100,
+      avg_student_growth: 140,
+      data_points: 100,
       total_tests: 80
     }
   });
@@ -104,15 +106,15 @@ async function createDistrictComparisonTable() {
 
 <div class="card">${await createDistrictComparisonTable()}</div>
 
-## Performance by Year
+## Student Growth by Year
 
-This chart shows how districts compare on the two key performance metrics over time. Each line represents a different district, with separate panels for "Exceeding Expectations" and "Meeting or Exceeding Expectations".
+This chart shows how districts compare in student growth over time. Each line represents a different district, showing their average Student Growth Percentile trends.
 
 ```js
 async function createPerformanceOverTimeChart() {
   if (selected.length === 0) {
     return html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
-      <p style="color: #666; margin: 0;">Select school districts to view performance trends</p>
+      <p style="color: #666; margin: 0;">Select school districts to view growth trends</p>
     </div>`;
   }
   
@@ -122,11 +124,11 @@ async function createPerformanceOverTimeChart() {
     SELECT 
       DIST_NAME as district,
       year,
-      100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
-      100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding
+      AVG(avg_sgp) as avg_student_growth
     FROM mcas 
     WHERE SUBSTR(ORG_CODE, -4) = '0000' 
       AND DIST_NAME IN (${districtList})
+      AND avg_sgp IS NOT NULL
       AND n > 0
     GROUP BY DIST_NAME, year
     ORDER BY DIST_NAME, year
@@ -134,24 +136,11 @@ async function createPerformanceOverTimeChart() {
   
   const data = await db.query(query);
   
-  // Transform data for chart - create long format with performance variables
-  const chartData = data.flatMap(d => [
-    {
-      district: d.district,
-      year: d.year,
-      variable: "Exceeding Expectations",
-      percentage: d.pct_exceeding
-    },
-    {
-      district: d.district,
-      year: d.year,
-      variable: "Meeting or Exceeding Expectations", 
-      percentage: d.pct_meeting_or_exceeding
-    }
-  ]);
+  // Filter out null values
+  const chartData = data.filter(d => d.avg_student_growth !== null);
   
   return Plot.plot({
-    title: "MCAS Performance by Year",
+    title: "Student Growth by Year",
     width: 830,
     height: 400,
     x: {
@@ -160,34 +149,28 @@ async function createPerformanceOverTimeChart() {
       tickFormat: d => d.toString()
     },
     y: {
-      label: "Percentage of Students (%)",
+      label: "Average Student Growth Percentile",
       grid: true,
-      domain: [0, 100]
-    },
-    fx: {
-      label: "",
-      domain: ["Meeting or Exceeding Expectations", "Exceeding Expectations"]
     },
     color: {
       legend: true,
       scheme: "category10"
     },
     marks: [
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7}),
       Plot.line(chartData, {
         x: "year",
-        y: "percentage",
-        fx: "variable",
+        y: "avg_student_growth",
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\n${d.variable}\n${d.year}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\n${d.year}: ${d.avg_student_growth?.toFixed(1)}`
       }),
       Plot.dot(chartData, {
         x: "year",
-        y: "percentage", 
-        fx: "variable",
+        y: "avg_student_growth", 
         fill: "district",
         r: 3,
-        title: d => `${d.district}\n${d.variable}\n${d.year}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\n${d.year}: ${d.avg_student_growth?.toFixed(1)}`
       })
     ]
   });
@@ -196,15 +179,15 @@ async function createPerformanceOverTimeChart() {
 
 <div class="card">${await createPerformanceOverTimeChart()}</div>
 
-## Performance by Subject
+## Student Growth by Subject
 
-This chart breaks down performance by subject area, allowing you to see which districts excel in specific subjects and how performance varies between English, Math, and Science.
+This chart breaks down student growth by subject area, allowing you to see which districts show stronger growth in specific subjects and how growth varies between English, Math, and Science.
 
 ```js
 async function createPerformanceBySubjectChart() {
   if (selected.length === 0) {
     return html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
-      <p style="color: #666; margin: 0;">Select school districts to view performance by subject</p>
+      <p style="color: #666; margin: 0;">Select school districts to view growth by subject</p>
     </div>`;
   }
   
@@ -214,11 +197,11 @@ async function createPerformanceBySubjectChart() {
     SELECT 
       DIST_NAME as district,
       SUBJECT_CODE as subject,
-      100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
-      100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding
+      AVG(avg_sgp) as avg_student_growth
     FROM mcas 
     WHERE SUBSTR(ORG_CODE, -4) = '0000' 
       AND DIST_NAME IN (${districtList})
+      AND avg_sgp IS NOT NULL
       AND n > 0
     GROUP BY DIST_NAME, SUBJECT_CODE
     ORDER BY DIST_NAME, SUBJECT_CODE
@@ -226,24 +209,11 @@ async function createPerformanceBySubjectChart() {
   
   const data = await db.query(query);
   
-  // Transform data for chart - create long format with performance variables
-  const chartData = data.flatMap(d => [
-    {
-      district: d.district,
-      subject: d.subject,
-      variable: "Exceeding Expectations",
-      percentage: d.pct_exceeding
-    },
-    {
-      district: d.district,
-      subject: d.subject,
-      variable: "Meeting or Exceeding Expectations", 
-      percentage: d.pct_meeting_or_exceeding
-    }
-  ]);
+  // Filter out null values
+  const chartData = data.filter(d => d.avg_student_growth !== null);
   
   return Plot.plot({
-    title: "MCAS Performance by Subject",
+    title: "Student Growth by Subject",
     width: 830,
     height: 400,
     x: {
@@ -251,34 +221,28 @@ async function createPerformanceBySubjectChart() {
       tickFormat: d => subjectLabels[d] || d
     },
     y: {
-      label: "Percentage of Students (%)",
+      label: "Average Student Growth Percentile",
       grid: true,
-      domain: [0, 100]
-    },
-    fx: {
-      label: "",
-      domain: ["Meeting or Exceeding Expectations", "Exceeding Expectations"]
     },
     color: {
       legend: true,
       scheme: "category10"
     },
     marks: [
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7}),
       Plot.line(chartData, {
         x: "subject",
-        y: "percentage",
-        fx: "variable",
+        y: "avg_student_growth",
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}: ${d.avg_student_growth?.toFixed(1)}`
       }),
       Plot.dot(chartData, {
         x: "subject",
-        y: "percentage",
-        fx: "variable",
+        y: "avg_student_growth",
         fill: "district",
         r: 3,
-        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}: ${d.avg_student_growth?.toFixed(1)}`
       })
     ]
   });
@@ -287,15 +251,15 @@ async function createPerformanceBySubjectChart() {
 
 <div class="card">${await createPerformanceBySubjectChart()}</div>
 
-## Performance by Grade
+## Student Growth by Grade
 
-This chart shows performance across different grade levels, helping you understand how districts perform at elementary, middle, and high school levels.
+This chart shows student growth across different grade levels, helping you understand how districts perform at elementary, middle, and high school levels.
 
 ```js
 async function createPerformanceByGradeChart() {
   if (selected.length === 0) {
     return html`<div style="width: 830px; height: 400px; display: flex; align-items: center; justify-content: center; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
-      <p style="color: #666; margin: 0;">Select school districts to view performance by grade</p>
+      <p style="color: #666; margin: 0;">Select school districts to view growth by grade</p>
     </div>`;
   }
   
@@ -305,11 +269,11 @@ async function createPerformanceByGradeChart() {
     SELECT 
       DIST_NAME as district,
       grade,
-      100.0 * SUM(n_e) / SUM(n) as pct_exceeding,
-      100.0 * SUM(n_me) / SUM(n) as pct_meeting_or_exceeding
+      AVG(avg_sgp) as avg_student_growth
     FROM mcas 
     WHERE SUBSTR(ORG_CODE, -4) = '0000' 
       AND DIST_NAME IN (${districtList})
+      AND avg_sgp IS NOT NULL
       AND n > 0
     GROUP BY DIST_NAME, grade
     ORDER BY DIST_NAME, grade
@@ -317,58 +281,39 @@ async function createPerformanceByGradeChart() {
   
   const data = await db.query(query);
   
-  // Transform data for chart - create long format with performance variables
-  const chartData = data.flatMap(d => [
-    {
-      district: d.district,
-      grade: d.grade,
-      variable: "Exceeding Expectations",
-      percentage: d.pct_exceeding
-    },
-    {
-      district: d.district,
-      grade: d.grade,
-      variable: "Meeting or Exceeding Expectations", 
-      percentage: d.pct_meeting_or_exceeding
-    }
-  ]);
+  // Filter out null values
+  const chartData = data.filter(d => d.avg_student_growth !== null);
   
   return Plot.plot({
-    title: "MCAS Performance by Grade",
+    title: "Student Growth by Grade",
     width: 830,
     height: 400,
     x: {
       label: "Grade"
     },
     y: {
-      label: "Percentage of Students (%)",
+      label: "Average Student Growth Percentile",
       grid: true,
-      domain: [0, 100]
-    },
-    fx: {
-      label: "",
-      domain: ["Meeting or Exceeding Expectations", "Exceeding Expectations"]
     },
     color: {
       legend: true,
       scheme: "category10"
     },
     marks: [
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7}),
       Plot.line(chartData, {
         x: "grade",
-        y: "percentage",
-        fx: "variable",
+        y: "avg_student_growth",
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\nGrade ${d.grade}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\nGrade ${d.grade}: ${d.avg_student_growth?.toFixed(1)}`
       }),
       Plot.dot(chartData, {
         x: "grade",
-        y: "percentage",
-        fx: "variable",
+        y: "avg_student_growth",
         fill: "district",
         r: 3,
-        title: d => `${d.district}\nGrade ${d.grade}\n${d.variable}: ${d.percentage?.toFixed(1)}%`
+        title: d => `${d.district}\nGrade ${d.grade}: ${d.avg_student_growth?.toFixed(1)}`
       })
     ]
   });
@@ -377,14 +322,21 @@ async function createPerformanceByGradeChart() {
 
 <div class="card">${await createPerformanceByGradeChart()}</div>
 
+
+
 ## About the Data
 
-The performance data is sourced from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program for measuring student achievement in core academic subjects. All data comes from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
+The student growth data is sourced from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program for measuring student achievement and growth in core academic subjects. All data comes from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
 
-**Performance Level Definitions:**
-- **Exceeding Expectations:** Students demonstrate a comprehensive understanding and advanced skills that go beyond grade-level standards.
-- **Meeting or Exceeding Expectations:** Students meet or surpass the minimum proficiency requirements for their grade level.
+**Student Growth Percentile (SGP) Definition:**
+- **Student Growth Percentile (SGP):** Compares a student's growth to that of other students with similar prior MCAS performance. An SGP of 50 represents typical growth, while values above 50 indicate above-average growth and values below 50 indicate below-average growth.
 
-The data includes test results across multiple years, grade levels, and subject areas, providing a comprehensive view into each district's academic performance trends and comparisons.
+**Understanding the Charts:**
+- The dashed line at 50 represents typical/average growth
+- Districts with lines above 50 show above-average student growth
+- Districts with lines below 50 show below-average student growth
+- Higher values indicate stronger academic growth over time
+
+The data includes growth results across multiple years, grade levels, and subject areas, providing a comprehensive view into how effectively each district is helping students improve academically over time.
 
 To view detailed results for individual districts or schools, visit the [School Districts page](/data/school-districts) or [Schools page](/data/schools).

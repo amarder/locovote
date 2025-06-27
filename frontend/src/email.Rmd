@@ -1,0 +1,188 @@
+---
+title: ""
+author: ""
+date: ""
+format: 
+  typst:
+    toc: false
+    number_sections: true
+    highlight_style: github
+    mainfont: "Arial"
+    fontsize: 11pt
+    geometry: "margin=1in"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, 
+                     fig.width = 10, fig.height = 7, fig.align = "center",
+                     out.width = "100%", dpi = 300)
+```
+
+```{r libraries}
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(estimatr)  # for robust standard errors in weighted regression
+library(broom)
+library(knitr)
+library(tidyr)
+library(scales)
+
+# Subject labels for display
+subject_labels <- c("ELA" = "English", "MATH" = "Math", "SCI" = "Science")
+```
+
+```{r load-data}
+# Connect to SQLite database
+con <- dbConnect(SQLite(), "../../data/processed/mcas.db")
+
+# Read MCAS data
+query <- "
+  SELECT 
+    DIST_NAME as district,
+    year,
+    SUBJECT_CODE as subject,
+    AVG(avg_sgp) as avg_sgp,
+    SUM(n_white) as total_n_white,
+    SUM(n) as total_n,
+    CASE 
+      WHEN SUM(n) > 0 THEN CAST(SUM(n_white) AS FLOAT) / SUM(n)
+      ELSE NULL 
+    END as prop_white
+  FROM mcas 
+  WHERE SUBSTR(ORG_CODE, -4) = '0000' 
+    AND avg_sgp IS NOT NULL
+    AND n > 0
+    AND n_white IS NOT NULL
+    AND DIST_NAME != 'State'
+  GROUP BY DIST_NAME, year, SUBJECT_CODE
+  HAVING SUM(n) > 100
+  ORDER BY district, year, subject
+"
+
+mcas_data <- dbGetQuery(con, query)
+dbDisconnect(con)
+
+# Filter out null values and ensure reasonable bounds
+mcas_data <- mcas_data %>%
+  filter(
+    !is.na(avg_sgp),
+    !is.na(prop_white),
+    prop_white >= 0,
+    prop_white <= 1
+  )
+
+# cat("Data loaded:", nrow(mcas_data), "observations\n")
+# cat("Years:", min(mcas_data$year), "-", max(mcas_data$year), "\n")
+# cat("Districts:", length(unique(mcas_data$district)), "\n")
+# cat("Subjects:", paste(unique(mcas_data$subject), collapse = ", "), "\n")
+```
+
+```{r regression-analysis}
+# Function to run weighted regression with robust standard errors
+run_weighted_regression <- function(data) {
+  if (nrow(data) < 3) return(NULL)
+  
+  # Calculate normalized weights
+  normalized_weights <- data$total_n / sum(data$total_n) * nrow(data)
+  
+  # Use estimatr::lm_robust for weighted regression with robust standard errors
+  model <- lm_robust(avg_sgp ~ prop_white, 
+                     data = data, 
+                     weights = total_n,
+                     se_type = "stata")
+
+  # Extract coefficients
+  coefs <- tidy(model)
+  slope_row <- coefs[coefs$term == "prop_white", ]
+  
+  return(data.frame(
+    slope = slope_row$estimate,
+    std_error = slope_row$std.error,
+    t_stat = slope_row$statistic,
+    p_value = slope_row$p.value,
+    conf_low = slope_row$conf.low,
+    conf_high = slope_row$conf.high,
+    n_districts = nrow(data),
+    total_students = sum(data$total_n)
+  ))
+}
+
+# Run regressions for each year-subject combination
+regression_results <- mcas_data %>%
+  group_by(year, subject) %>%
+  do(run_weighted_regression(.)) %>%
+  filter(!is.na(slope)) %>%
+  mutate(
+    subject_label = recode(subject, !!!subject_labels),
+    significant = p_value < 0.05
+  )
+
+# cat("Regression results for", nrow(regression_results), "year-subject combinations\n")
+```
+
+
+```{r main-plot, fig.width=6.5, fig.height=9}
+# Create the main scatter plot with facets
+p1 <- ggplot(mcas_data, aes(x = prop_white, y = avg_sgp)) +
+  geom_point(aes(size = total_n), alpha = 0.6, color = "#2563eb") +
+  geom_smooth(aes(weight = total_n), method = "lm", se = FALSE, color = "#dc2626", size = 1) +
+  geom_hline(yintercept = 50, linetype = "dashed", color = "#666666", alpha = 0.7) +
+  facet_grid(year ~ subject, labeller = labeller(subject = subject_labels)) +
+  scale_x_continuous(labels = percent_format(), name = "Proportion White") +
+  scale_y_continuous(name = "Average Student Growth Percentile") +
+  scale_size_continuous(name = "Number of Students", 
+                       range = c(0.01, 2),
+                       labels = comma_format()) +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 11, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  ) +
+  labs(
+    title = "Student Growth vs. Proportion White by Year and Subject",
+    subtitle = "Each point represents a school district, sized by number of students.\nRed lines show weighted regression trends."
+  )
+
+print(p1)
+
+# Save as PNG for email
+ggsave("student_growth_by_demographics.png", plot = p1, 
+       width = 6.5, height = 9, dpi = 300, units = "in", bg = "white")
+```
+
+```{r slope-trends, fig.width=6.5, fig.height=4}
+# Plot slope estimates over time by subject with facet grid and error bars
+p2 <- regression_results %>%
+  ggplot(aes(x = year, y = slope)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "black", alpha = 0.7, size = 0.8) +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high), 
+                width = 0.2, alpha = 0.6, color = "#2563eb") +
+  geom_point(color = "#2563eb", alpha = 0.8) +
+  facet_grid(. ~ subject_label) +
+  scale_x_continuous(breaks = pretty_breaks()) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor.x = element_blank(),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.title = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 11)
+  ) +
+  labs(
+    title = "Regression Slope Estimates Over Time by Subject",
+    subtitle = "Change in student growth percentile per unit increase in proportion white students\nError bars show 95% confidence intervals",
+    x = "Year",
+    y = "Slope Estimate",
+    caption = "Districts weighted by student enrollment. Separate regressions for each year-subject combination."
+  )
+
+print(p2)
+
+# Save as PNG for email  
+ggsave("slope_trends_by_subject.png", plot = p2,
+       width = 6.5, height = 4, dpi = 300, units = "in", bg = "white")
+```
