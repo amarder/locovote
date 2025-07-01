@@ -44,6 +44,122 @@ const selected = view(searchCheckbox(districtNames, { urlParam: "q", value: ["Bo
 const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
 ```
 
+```js
+function calculateWeightedLinearRegression(data, xKey, yKey, weightKey) {
+  if (data.length < 3) return null;
+
+  const n = data.length;
+  const weights = data.map(d => d[weightKey]);
+  const xValues = data.map(d => d[xKey]);
+  const yValues = data.map(d => d[yKey]);
+
+  const sumWeights = weights.reduce((sum, w) => sum + w, 0);
+  if (sumWeights === 0) return null;
+
+  const xMean = data.reduce((sum, d, i) => sum + weights[i] * d[xKey], 0) / sumWeights;
+  const yMean = data.reduce((sum, d, i) => sum + weights[i] * d[yKey], 0) / sumWeights;
+
+  const numerator = data.reduce((sum, d, i) => sum + weights[i] * (d[xKey] - xMean) * (d[yKey] - yMean), 0);
+  const denominator = data.reduce((sum, d, i) => sum + weights[i] * Math.pow(d[xKey] - xMean, 2), 0);
+
+  if (denominator === 0) return null;
+
+  const slope = numerator / denominator;
+  const intercept = yMean - slope * xMean;
+
+  return { slope, intercept };
+}
+
+async function createMetricsData(selectedDistricts) {
+  if (!selectedDistricts || selectedDistricts.length === 0) {
+    return [];
+  }
+
+  // 1. Fetch all necessary data
+  const allDataQuery = `
+    SELECT 
+      DIST_NAME as district,
+      year,
+      SUBJECT_CODE as subject,
+      grade,
+      avg_sgp,
+      n_me,
+      n_white,
+      n
+    FROM mcas 
+    WHERE SUBSTR(ORG_CODE, -4) = '0000' 
+      AND avg_sgp IS NOT NULL AND n > 0 AND n_white IS NOT NULL AND n_me IS NOT NULL
+      AND DIST_NAME != 'State'
+  `;
+  const allData = await db.query(allDataQuery);
+
+  allData.forEach(d => {
+    d.prop_white = d.n > 0 ? d.n_white / d.n : 0;
+  });
+
+  // 2. Calculate regression adjustments for each year/subject
+  const regressionParams = {};
+  const groupedData = {};
+  allData.forEach(d => {
+    const key = `${d.year}-${d.subject}`;
+    if (!groupedData[key]) groupedData[key] = [];
+    groupedData[key].push(d);
+  });
+  
+  for (const key in groupedData) {
+    const group = groupedData[key];
+    const regression = calculateWeightedLinearRegression(group, 'prop_white', 'avg_sgp', 'n');
+    if (regression) {
+      regressionParams[key] = regression;
+    }
+  }
+
+  // 3. Filter for selected districts and calculate all three metrics
+  const districtList = selectedDistricts.map(d => `'${d}'`).join(',');
+  const selectedDataQuery = `
+    SELECT 
+      DIST_NAME as district,
+      year,
+      SUBJECT_CODE as subject,
+      grade,
+      avg_sgp,
+      n_me,
+      n_white,
+      n
+    FROM mcas 
+    WHERE SUBSTR(ORG_CODE, -4) = '0000' AND DIST_NAME IN (${districtList})
+      AND avg_sgp IS NOT NULL AND n > 0 AND n_white IS NOT NULL AND n_me IS NOT NULL
+  `;
+  const selectedData = await db.query(selectedDataQuery);
+
+  // 4. Create "tidy" data with a row for each metric
+  const tidyData = [];
+  selectedData.forEach(d => {
+    d.prop_white = d.n > 0 ? d.n_white / d.n : 0;
+    const key = `${d.year}-${d.subject}`;
+    const params = regressionParams[key];
+    
+    const test_score_progress = d.avg_sgp;
+    const test_score_levels = d.n > 0 ? (d.n_me / d.n) * 100 : 0;
+    
+    let race_balanced_progress = null;
+    if (params) {
+      const { slope, intercept } = params;
+      const predicted_sgp = slope * d.prop_white + intercept;
+      race_balanced_progress = test_score_progress - predicted_sgp + 50;
+    }
+
+    if (race_balanced_progress !== null) {
+        tidyData.push({ ...d, metric: "Race-Balanced Progress", value: race_balanced_progress });
+    }
+    tidyData.push({ ...d, metric: "Test Score Progress", value: test_score_progress });
+    tidyData.push({ ...d, metric: "Test Score Levels", value: test_score_levels });
+  });
+
+  return tidyData;
+}
+```
+
 ## Overall Growth Performance
 
 This table shows the average Student Growth Percentile for each selected school district, aggregated across all years, grades, and subjects in the dataset.
@@ -56,48 +172,67 @@ async function createDistrictComparisonTable() {
     </div>`;
   }
   
-  const districtList = selected.map(d => `'${d}'`).join(',');
-  
-  const query = `
-    SELECT 
-      DIST_NAME as district,
-      SUM(avg_sgp * avg_sgp_incl) / SUM(avg_sgp_incl) as avg_student_growth,
-      SUM(avg_sgp_incl) as data_points,
-      SUM(n) as total_tests
-    FROM mcas 
-    WHERE SUBSTR(ORG_CODE, -4) = '0000' 
-      AND DIST_NAME IN (${districtList})
-      AND avg_sgp IS NOT NULL
-      AND avg_sgp_incl > 0
-      AND n > 0
-    GROUP BY DIST_NAME
-    ORDER BY DIST_NAME
-  `;
-  
-  const data = await db.query(query);
+  const allMetricsData = await createMetricsData(selected);
+
+  // Aggregate data for the table
+  const aggregatedData = {};
+  allMetricsData.forEach(d => {
+    if (!aggregatedData[d.district]) {
+      aggregatedData[d.district] = {
+        district: d.district,
+        "Race-Balanced Progress": { sum: 0, count: 0 },
+        "Test Score Progress": { sum: 0, count: 0 },
+        "Test Score Levels": { sum: 0, count: 0 },
+        total_tests: 0
+      };
+    }
+    const districtEntry = aggregatedData[d.district];
+    if (d.metric === "Race-Balanced Progress") {
+      districtEntry["Race-Balanced Progress"].sum += d.value;
+      districtEntry["Race-Balanced Progress"].count++;
+    } else if (d.metric === "Test Score Progress") {
+      districtEntry["Test Score Progress"].sum += d.value;
+      districtEntry["Test Score Progress"].count++;
+    } else if (d.metric === "Test Score Levels") {
+      districtEntry["Test Score Levels"].sum += d.value;
+      districtEntry["Test Score Levels"].count++;
+    }
+    districtEntry.total_tests += d.n;
+  });
+
+  const tableData = Object.values(aggregatedData).map(d => ({
+    district: d.district,
+    race_balanced_progress: d["Race-Balanced Progress"].count > 0 ? (d["Race-Balanced Progress"].sum / d["Race-Balanced Progress"].count) : null,
+    test_score_progress: d["Test Score Progress"].count > 0 ? (d["Test Score Progress"].sum / d["Test Score Progress"].count) : null,
+    test_score_levels: d["Test Score Levels"].count > 0 ? (d["Test Score Levels"].sum / d["Test Score Levels"].count) : null,
+    total_tests: d.total_tests / 3 // Adjust for triple counting
+  }));
   
   // Reorder data to match selection order
   const orderedData = selected.map(selectedDistrict => 
-    data.find(d => d.district === selectedDistrict)
+    tableData.find(d => d.district === selectedDistrict)
   ).filter(d => d !== undefined);
   
   return Inputs.table(orderedData, {
-    columns: ["district", "avg_student_growth", "data_points", "total_tests"],
+    columns: ["district", "race_balanced_progress", "test_score_progress", "test_score_levels", "total_tests"],
     header: {
       "district": "School District", 
-      "avg_student_growth": "Avg Growth Percentile", 
-      "data_points": "Data Points",
+      "race_balanced_progress": "Race-Balanced Progress",
+      "test_score_progress": "Test Score Progress",
+      "test_score_levels": "Test Score Levels",
       "total_tests": "# Tests"
     },
     format: {
-      avg_student_growth: (x) => x?.toFixed(1) || "N/A", 
-      data_points: (x) => x.toLocaleString(),
+      race_balanced_progress: (x) => x?.toFixed(1) || "N/A",
+      test_score_progress: (x) => x?.toFixed(1) || "N/A",
+      test_score_levels: (x) => x ? `${x.toFixed(1)}%` : "N/A",
       total_tests: (x) => x.toLocaleString()
     },
     width: {
       district: 200,
-      avg_student_growth: 140,
-      data_points: 100,
+      race_balanced_progress: 150,
+      test_score_progress: 150,
+      test_score_levels: 150,
       total_tests: 80
     }
   });
@@ -118,38 +253,45 @@ async function createPerformanceOverTimeChart() {
     </div>`;
   }
   
-  const districtList = selected.map(d => `'${d}'`).join(',');
-  
-  const query = `
-    SELECT 
-      DIST_NAME as district,
-      year,
-      AVG(avg_sgp) as avg_student_growth
-    FROM mcas 
-    WHERE SUBSTR(ORG_CODE, -4) = '0000' 
-      AND DIST_NAME IN (${districtList})
-      AND avg_sgp IS NOT NULL
-      AND n > 0
-    GROUP BY DIST_NAME, year
-    ORDER BY DIST_NAME, year
-  `;
-  
-  const data = await db.query(query);
-  
-  // Filter out null values
-  const chartData = data.filter(d => d.avg_student_growth !== null);
+  const tidyData = await createMetricsData(selected);
+  if (tidyData.length === 0) return html`<p>No data available for the selected districts.</p>`;
+
+  // Aggregate data by district, year, and metric
+  const aggregatedData = {};
+  tidyData.forEach(d => {
+    const key = `${d.district}-${d.year}-${d.metric}`;
+    if (!aggregatedData[key]) {
+      aggregatedData[key] = { district: d.district, year: d.year, metric: d.metric, sum: 0, count: 0 };
+    }
+    aggregatedData[key].sum += d.value;
+    aggregatedData[key].count++;
+  });
+
+  const chartData = Object.values(aggregatedData).map(d => ({
+    district: d.district,
+    year: d.year,
+    metric: d.metric,
+    value: d.count > 0 ? d.sum / d.count : null
+  })).filter(d => d.value !== null);
   
   return Plot.plot({
-    title: "Student Growth by Year",
+    title: "Performance Comparison by Year",
     width: 830,
     height: 400,
+    facet: {
+      data: chartData,
+      x: "metric"
+    },
+    fx: {
+      domain: ["Race-Balanced Progress", "Test Score Progress", "Test Score Levels"]
+    },
     x: {
       label: "Year",
       type: "linear",
       tickFormat: d => d.toString()
     },
     y: {
-      label: "Average Student Growth Percentile",
+      label: "Value",
       grid: true,
     },
     color: {
@@ -157,20 +299,20 @@ async function createPerformanceOverTimeChart() {
       scheme: "category10"
     },
     marks: [
-      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7}),
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7, y: (d) => d.metric === "Test Score Levels" ? null: 50}),
       Plot.line(chartData, {
         x: "year",
-        y: "avg_student_growth",
+        y: "value",
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\n${d.year}: ${d.avg_student_growth?.toFixed(1)}`
+        title: d => `${d.district}\n${d.year}: ${d.value?.toFixed(1)}`
       }),
       Plot.dot(chartData, {
         x: "year",
-        y: "avg_student_growth", 
+        y: "value", 
         fill: "district",
         r: 3,
-        title: d => `${d.district}\n${d.year}: ${d.avg_student_growth?.toFixed(1)}`
+        title: d => `${d.district}\n${d.year}: ${d.value?.toFixed(1)}`
       })
     ]
   });
@@ -191,37 +333,44 @@ async function createPerformanceBySubjectChart() {
     </div>`;
   }
   
-  const districtList = selected.map(d => `'${d}'`).join(',');
+  const tidyData = await createMetricsData(selected);
+  if (tidyData.length === 0) return html`<p>No data available for the selected districts.</p>`;
   
-  const query = `
-    SELECT 
-      DIST_NAME as district,
-      SUBJECT_CODE as subject,
-      AVG(avg_sgp) as avg_student_growth
-    FROM mcas 
-    WHERE SUBSTR(ORG_CODE, -4) = '0000' 
-      AND DIST_NAME IN (${districtList})
-      AND avg_sgp IS NOT NULL
-      AND n > 0
-    GROUP BY DIST_NAME, SUBJECT_CODE
-    ORDER BY DIST_NAME, SUBJECT_CODE
-  `;
-  
-  const data = await db.query(query);
-  
-  // Filter out null values
-  const chartData = data.filter(d => d.avg_student_growth !== null);
-  
+  // Aggregate data by district, subject, and metric
+  const aggregatedData = {};
+  tidyData.forEach(d => {
+    const key = `${d.district}-${d.subject}-${d.metric}`;
+    if (!aggregatedData[key]) {
+      aggregatedData[key] = { district: d.district, subject: d.subject, metric: d.metric, sum: 0, count: 0 };
+    }
+    aggregatedData[key].sum += d.value;
+    aggregatedData[key].count++;
+  });
+
+  const chartData = Object.values(aggregatedData).map(d => ({
+    district: d.district,
+    subject: d.subject,
+    metric: d.metric,
+    value: d.count > 0 ? d.sum / d.count : null
+  })).filter(d => d.value !== null);
+
   return Plot.plot({
-    title: "Student Growth by Subject",
+    title: "Performance Comparison by Subject",
     width: 830,
     height: 400,
+    facet: {
+      data: chartData,
+      x: "metric"
+    },
+    fx: {
+      domain: ["Race-Balanced Progress", "Test Score Progress", "Test Score Levels"]
+    },
     x: {
       label: "",
       tickFormat: d => subjectLabels[d] || d
     },
     y: {
-      label: "Average Student Growth Percentile",
+      label: "Value",
       grid: true,
     },
     color: {
@@ -229,20 +378,20 @@ async function createPerformanceBySubjectChart() {
       scheme: "category10"
     },
     marks: [
-      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7}),
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7, y: (d) => d.metric === "Test Score Levels" ? null: 50}),
       Plot.line(chartData, {
         x: "subject",
-        y: "avg_student_growth",
+        y: "value",
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}: ${d.avg_student_growth?.toFixed(1)}`
+        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}: ${d.value?.toFixed(1)}`
       }),
       Plot.dot(chartData, {
         x: "subject",
-        y: "avg_student_growth",
+        y: "value",
         fill: "district",
         r: 3,
-        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}: ${d.avg_student_growth?.toFixed(1)}`
+        title: d => `${d.district}\n${subjectLabels[d.subject] || d.subject}: ${d.value?.toFixed(1)}`
       })
     ]
   });
@@ -263,36 +412,43 @@ async function createPerformanceByGradeChart() {
     </div>`;
   }
   
-  const districtList = selected.map(d => `'${d}'`).join(',');
-  
-  const query = `
-    SELECT 
-      DIST_NAME as district,
-      grade,
-      AVG(avg_sgp) as avg_student_growth
-    FROM mcas 
-    WHERE SUBSTR(ORG_CODE, -4) = '0000' 
-      AND DIST_NAME IN (${districtList})
-      AND avg_sgp IS NOT NULL
-      AND n > 0
-    GROUP BY DIST_NAME, grade
-    ORDER BY DIST_NAME, grade
-  `;
-  
-  const data = await db.query(query);
-  
-  // Filter out null values
-  const chartData = data.filter(d => d.avg_student_growth !== null);
+  const tidyData = await createMetricsData(selected);
+  if (tidyData.length === 0) return html`<p>No data available for the selected districts.</p>`;
+
+  // Aggregate data by district, grade, and metric
+  const aggregatedData = {};
+  tidyData.forEach(d => {
+    const key = `${d.district}-${d.grade}-${d.metric}`;
+    if (!aggregatedData[key]) {
+      aggregatedData[key] = { district: d.district, grade: d.grade, metric: d.metric, sum: 0, count: 0 };
+    }
+    aggregatedData[key].sum += d.value;
+    aggregatedData[key].count++;
+  });
+
+  const chartData = Object.values(aggregatedData).map(d => ({
+    district: d.district,
+    grade: d.grade,
+    metric: d.metric,
+    value: d.count > 0 ? d.sum / d.count : null
+  })).filter(d => d.value !== null);
   
   return Plot.plot({
-    title: "Student Growth by Grade",
+    title: "Performance Comparison by Grade",
     width: 830,
     height: 400,
+    facet: {
+      data: chartData,
+      x: "metric"
+    },
+    fx: {
+      domain: ["Race-Balanced Progress", "Test Score Progress", "Test Score Levels"]
+    },
     x: {
       label: "Grade"
     },
     y: {
-      label: "Average Student Growth Percentile",
+      label: "Value",
       grid: true,
     },
     color: {
@@ -300,20 +456,20 @@ async function createPerformanceByGradeChart() {
       scheme: "category10"
     },
     marks: [
-      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7}),
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "3,3", opacity: 0.7, y: (d) => d.metric === "Test Score Levels" ? null: 50}),
       Plot.line(chartData, {
         x: "grade",
-        y: "avg_student_growth",
+        y: "value",
         stroke: "district",
         strokeWidth: 2,
-        title: d => `${d.district}\nGrade ${d.grade}: ${d.avg_student_growth?.toFixed(1)}`
+        title: d => `${d.district}\nGrade ${d.grade}: ${d.value?.toFixed(1)}`
       }),
       Plot.dot(chartData, {
         x: "grade",
-        y: "avg_student_growth",
+        y: "value",
         fill: "district",
         r: 3,
-        title: d => `${d.district}\nGrade ${d.grade}: ${d.avg_student_growth?.toFixed(1)}`
+        title: d => `${d.district}\nGrade ${d.grade}: ${d.value?.toFixed(1)}`
       })
     ]
   });
@@ -322,21 +478,20 @@ async function createPerformanceByGradeChart() {
 
 <div class="card">${await createPerformanceByGradeChart()}</div>
 
-
-
 ## About the Data
 
-The student growth data is sourced from the Massachusetts Comprehensive Assessment System (MCAS), the state's standardized testing program for measuring student achievement and growth in core academic subjects. All data comes from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data).
+The data in these comparisons comes from the Massachusetts Comprehensive Assessment System (MCAS). The three metrics—Test Score Levels, Test Score Progress, and Race-Balanced Progress—offer different ways to understand a school district's performance.
 
-**Student Growth Percentile (SGP) Definition:**
-- **Student Growth Percentile (SGP):** Compares a student's growth to that of other students with similar prior MCAS performance. An SGP of 50 represents typical growth, while values above 50 indicate above-average growth and values below 50 indicate below-average growth.
+**Metric Definitions:**
+- **Test Score Levels:** This is the percentage of students meeting or exceeding expectations on their MCAS exams. It reflects the overall academic achievement level of the district's students in a given year.
+- **Test Score Progress (SGP):** This is the average Student Growth Percentile (SGP) for the district. SGP measures a student's academic growth relative to other students with similar past MCAS scores. A value of 50 indicates typical growth, while higher values suggest stronger-than-average growth.
+- **Race-Balanced Progress:** This is a regression-adjusted version of Test Score Progress. It's calculated by statistically removing the relationship between a district's student demographics (specifically, the proportion of white students) and its average SGP. The goal is to isolate the district's impact on student learning from demographic factors.
 
 **Understanding the Charts:**
-- The dashed line at 50 represents typical/average growth
-- Districts with lines above 50 show above-average student growth
-- Districts with lines below 50 show below-average student growth
-- Higher values indicate stronger academic growth over time
+- For progress metrics, the dashed line at 50 represents the state average or typical growth.
+- Districts with lines above 50 show above-average student growth.
+- Districts with lines below 50 show below-average student growth.
+- Higher values indicate stronger academic performance or growth over time.
 
-The data includes growth results across multiple years, grade levels, and subject areas, providing a comprehensive view into how effectively each district is helping students improve academically over time.
-
+All data is sourced from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). To learn more about the methodology, see the [Methodology page](/methodology).
 To view detailed results for individual districts or schools, visit the [School Districts page](/data/school-districts) or [Schools page](/data/schools).
