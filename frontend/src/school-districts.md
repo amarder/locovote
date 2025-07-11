@@ -616,7 +616,7 @@ async function createDistrictCards() {
 
 **Test Score Progress:** The district’s average Student Growth Percentile (SGP), which measures how much students grew academically relative to peers with similar prior MCAS scores. A score of 50 represents typical growth, higher values indicate faster-than-average growth.
 
-**Race-Balanced Progress:** A regression-adjusted version of Test Score Progress. It statistically removes the relationship between student demographics (specifically the proportion of white students) and average SGP.
+**Race-Balanced Progress:** A regression-adjusted version of Test Score Progress. It statistically removes the relationship between student demographics (specifically the proportion of White students) and average SGP.
 
 ## Reading the Charts
 
