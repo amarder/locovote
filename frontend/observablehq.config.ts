@@ -34,7 +34,7 @@ export default {
   pages: [
     {name: "Municipalities", path: "/municipalities"},
     {name: "School Districts", path: "/school-districts"},
-    {name: "Methodology", path: "/methodology"},
+    {name: "School Metrics", path: "/school-metrics"},
     {name: "Data", open: false, pages: [
       {name: "Municipalities", path: "/data/municipalities"},
       {name: "School Districts", path: "/data/school-districts"},  

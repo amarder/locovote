@@ -7,10 +7,13 @@ toc: true
 
 <div class="tip" label="Key Questions">
 
-- Are schools helping students achieve higher scores over time?
-- Is district performance changing over year / grade / subject?
+**Are districts helping students achieve higher scores over time?**
+
+**Is district performance changing by year, grade, or subject?**
 
 </div>
+
+Use the controls below to choose the school districts you want to compare and the metric you'd like to view. I recommend focusing on Test Score Progress and Race-Balanced Progress because research shows they are stronger indicators of school quality (see the [school metrics page](/school-metrics) for details).
 
 ```js
 import {searchCheckbox} from "./components/search-select.js"
@@ -216,6 +219,8 @@ async function createDistrictComparisonTable() {
 }
 ```
 
+## District Cards
+
 <div class="card">
 
 ```js
@@ -325,7 +330,7 @@ async function calculateGlobalYDomains() {
 
 ```js
 // Helper functions for creating small charts within cards
-function createMiniYearChart(districtData, yDomain, width, height = 200) {
+function createMiniYearChart(districtData, yDomain, width, height = 150) {
   // Aggregate by year
   const yearData = {};
   districtData.forEach(d => {
@@ -388,7 +393,7 @@ function createMiniYearChart(districtData, yDomain, width, height = 200) {
   });
 }
 
-function createMiniSubjectChart(districtData, yDomain, width, height = 200) {
+function createMiniSubjectChart(districtData, yDomain, width, height = 150) {
   // Aggregate by subject
   const subjectData = {};
   districtData.forEach(d => {
@@ -439,7 +444,7 @@ function createMiniSubjectChart(districtData, yDomain, width, height = 200) {
   });
 }
 
-function createMiniGradeChart(districtData, yDomain, width, height = 200) {
+function createMiniGradeChart(districtData, yDomain, width, height = 150) {
   // Aggregate by grade
   const gradeData = {};
   districtData.forEach(d => {
@@ -605,26 +610,20 @@ async function createDistrictCards() {
 
 <div>${await createDistrictCards()}</div>
 
-This tool allows you to compare Massachusetts school districts across different academic performance metrics. Use the search box above to select districts and explore how they differ across subjects, grades, and years.
+## Metric Definitions
 
-Choose multiple school districts to compare their MCAS performance using the selected metric. Popular comparisons include neighboring districts, similar-sized districts, or districts you're considering for your family.
+**Test Score Levels:** The percentage of students who meet or exceed expectations on the MCAS standardized tests. It reflects the district’s overall level of academic achievement in a given year.
 
-Compare school districts across the selected metric. Each card shows the district's overall performance plus detailed breakdowns by year, subject, and grade.
+**Test Score Progress:** The district’s average Student Growth Percentile (SGP), which measures how much students grew academically relative to peers with similar prior MCAS scores. A score of 50 represents typical growth, higher values indicate faster-than-average growth.
 
-**About the Data**
+**Race-Balanced Progress:** A regression-adjusted version of Test Score Progress. It statistically removes the relationship between student demographics (specifically the proportion of white students) and average SGP.
 
-The data in these comparisons comes from the Massachusetts Comprehensive Assessment System (MCAS). The three metrics—Test Score Levels, Test Score Progress, and Race-Balanced Progress—offer different ways to understand a school district's performance.
+## Reading the Charts
 
-**Metric Definitions:**
-- **Test Score Levels:** This is the percentage of students meeting or exceeding expectations on their MCAS exams. It reflects the overall academic achievement level of the district's students in a given year.
-- **Test Score Progress (SGP):** This is the average Student Growth Percentile (SGP) for the district. SGP measures a student's academic growth relative to other students with similar past MCAS scores. A value of 50 indicates typical growth, while higher values suggest stronger-than-average growth.
-- **Race-Balanced Progress:** This is a regression-adjusted version of Test Score Progress. It's calculated by statistically removing the relationship between a district's student demographics (specifically, the proportion of white students) and its average SGP. The goal is to isolate the district's impact on student learning from demographic factors.
+For the progress metrics (Test Score Progress and Race-Balanced Progress), the dashed line at 50 marks the state average (typical growth). Districts scoring above 50 exhibit above-average growth, whereas those below 50 show below-average growth.
 
-**Understanding the Charts:**
-- For progress metrics (Test Score Progress and Race-Balanced Progress), the dashed line at 50 represents the state average or typical growth.
-- For progress metrics, districts with values above 50 show above-average student growth, while values below 50 show below-average growth.
-- For Test Score Levels, higher percentages indicate more students meeting or exceeding expectations.
-- Higher values generally indicate stronger academic performance.
+For Test Score Levels, higher percentages mean more students meet or exceed expectations. While higher values reflect stronger academic performance, part of that performance likely stems from factors outside of school quality.
 
-All data is sourced from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). To learn more about the methodology, see the [Methodology page](/methodology).
-To view detailed results for individual districts or schools, visit the [School Districts page](/data/school-districts) or [Schools page](/data/schools).
+## About the Data
+
+These comparisons rely on data from the Massachusetts Comprehensive Assessment System (MCAS), provided by the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). For details on how the metrics are constructed, see the [school metrics page](/school-metrics). To explore results for individual districts or schools, visit the [school districts](/data/school-districts) or [schools](/data/schools) pages.

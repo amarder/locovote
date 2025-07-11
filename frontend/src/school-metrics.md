@@ -1,5 +1,5 @@
 ---
-title: Methodology
+title: School Metrics
 toc: true
 ---
 
@@ -77,7 +77,7 @@ function getInTextCitation(id, style = 'apa') {
 }
 ```
 
-# Methodology
+# School Metrics
 
 <div class="tip" label="Key Question">
 
