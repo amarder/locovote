@@ -610,7 +610,7 @@ async function createDistrictCards() {
 
 <div>${await createDistrictCards()}</div>
 
-## Metric Definitions
+<div class="note" label="Metric Definitions">
 
 **Test Score Levels:** The percentage of students who meet or exceed expectations on the MCAS standardized tests. It reflects the district’s overall level of academic achievement in a given year.
 
@@ -618,11 +618,15 @@ async function createDistrictCards() {
 
 **Race-Balanced Progress:** A regression-adjusted version of Test Score Progress. It statistically removes the relationship between student demographics (specifically the proportion of White students) and average SGP.
 
-## Reading the Charts
+</div>
+
+<div class="note" label="Reading the Charts">
 
 For the progress metrics (Test Score Progress and Race-Balanced Progress), the dashed line at 50 marks the state average (typical growth). Districts scoring above 50 exhibit above-average growth, whereas those below 50 show below-average growth.
 
 For Test Score Levels, higher percentages mean more students meet or exceed expectations. While higher values reflect stronger academic performance, part of that performance likely stems from factors outside of school quality.
+
+</div>
 
 ## About the Data
 
