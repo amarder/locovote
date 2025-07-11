@@ -5,19 +5,12 @@ toc: true
 
 # Compare School Districts
 
-This tool allows you to compare the academic **growth** of different Massachusetts school districts over time. Use the search box below to select districts and explore how they differ in Student Growth Percentiles (SGP) across subjects, grades, and years.
+<div class="tip" label="Key Questions">
 
-<div class="tip" label="Key Questions This Tool Answers">
-
-- **How do different districts compare in student growth?** See growth trends across multiple districts.
-- **How does growth vary by subject?** Compare districts in English, Math, and Science growth rates.
-- **Are there grade-level differences?** Analyze growth patterns across elementary, middle, and high school grades.
+- Are schools helping students achieve higher scores over time?
+- Is district performance changing over year / grade / subject?
 
 </div>
-
-### Select School Districts to Compare
-
-Choose multiple school districts to compare their MCAS Student Growth Percentiles. Popular comparisons include neighboring districts, similar-sized districts, or districts you're considering for your family.
 
 ```js
 import {searchCheckbox} from "./components/search-select.js"
@@ -33,21 +26,6 @@ const db = FileAttachment("data/mcas.db").sqlite();
 // Get district names for selection
 const districts = await db.query("SELECT DISTINCT DIST_NAME AS district FROM mcas WHERE SUBSTR(ORG_CODE, -4) = '0000' ORDER BY district");
 const districtNames = districts.map(d => d.district);
-```
-
-```js
-const selected = view(searchCheckbox(districtNames, { urlParam: "q", value: ["Boston", "Cambridge"]}));
-```
-
-```js
-// Add metric selector
-const selectedMetric = view(Inputs.select(
-  ["Race-Balanced Progress", "Test Score Progress", "Test Score Levels"],
-  {
-    label: "Select metric to compare:",
-    value: "Race-Balanced Progress"
-  }
-));
 ```
 
 ```js
@@ -171,9 +149,6 @@ async function createMetricsData(selectedDistricts) {
 }
 ```
 
-## Performance Comparison
-
-This table shows the average performance for each selected school district in the chosen metric, aggregated across all years, grades, and subjects in the dataset.
 
 ```js
 async function createDistrictComparisonTable() {
@@ -241,9 +216,26 @@ async function createDistrictComparisonTable() {
 }
 ```
 
-## District Comparison
+<div class="card">
 
-Compare school districts across the selected metric. Each card shows the district's overall performance plus detailed breakdowns by year, subject, and grade.
+```js
+const selectedComponent = searchCheckbox(districtNames, { urlParam: "q", value: ["Boston", "Cambridge"]});
+const selected = view(selectedComponent);
+```
+
+```js
+// Add metric selector
+const selectedMetric = view(Inputs.select(
+  ["Race-Balanced Progress", "Test Score Progress", "Test Score Levels"],
+  {
+    label: null,
+    value: "Test Score Progress",
+    width: 62
+  }
+));
+```
+
+</div>
 
 ```js
 // Calculate separate y-axis domains for each chart type based on aggregated data across all districts
@@ -349,8 +341,14 @@ function createMiniYearChart(districtData, yDomain, width, height = 200) {
     value: d.count > 0 ? d.sum / d.count : null
   })).filter(d => d.value !== null);
 
+  // Calculate domain with padding
+  const years = chartData.map(d => d.year);
+  const minYear = Math.min(...years);
+  const maxYear = Math.max(...years);
+  const xDomain = [minYear - 0.55, maxYear + 0.55];
+
   const showReferenceLine = selectedMetric !== "Test Score Levels";
-  const formatValue = (val) => selectedMetric === "Test Score Levels" ? `${val?.toFixed(1)}%` : val?.toFixed(1);
+  const formatValue = (val) => val?.toFixed(1);
 
   return Plot.plot({
     width,
@@ -362,6 +360,7 @@ function createMiniYearChart(districtData, yDomain, width, height = 200) {
     x: {
       label: "Year",
       type: "linear",
+      domain: xDomain,
       tickFormat: d => d.toString(),
       tickSize: 3,
       axis: "bottom",
@@ -406,7 +405,7 @@ function createMiniSubjectChart(districtData, yDomain, width, height = 200) {
   })).filter(d => d.value !== null);
 
   const showReferenceLine = selectedMetric !== "Test Score Levels";
-  const formatValue = (val) => selectedMetric === "Test Score Levels" ? `${val?.toFixed(1)}%` : val?.toFixed(1);
+  const formatValue = (val) => val?.toFixed(1);
 
   return Plot.plot({
     width,
@@ -456,8 +455,14 @@ function createMiniGradeChart(districtData, yDomain, width, height = 200) {
     value: d.count > 0 ? d.sum / d.count : null
   })).filter(d => d.value !== null);
 
+  // Calculate domain with padding
+  const grades = chartData.map(d => d.grade);
+  const minGrade = Math.min(...grades);
+  const maxGrade = Math.max(...grades);
+  const xDomain = [minGrade - 0.55, maxGrade + 0.55];
+
   const showReferenceLine = selectedMetric !== "Test Score Levels";
-  const formatValue = (val) => selectedMetric === "Test Score Levels" ? `${val?.toFixed(1)}%` : val?.toFixed(1);
+  const formatValue = (val) => val?.toFixed(1);
 
   return Plot.plot({
     width,
@@ -468,6 +473,7 @@ function createMiniGradeChart(districtData, yDomain, width, height = 200) {
     marginBottom: 30,
     x: {
       label: "Grade",
+      domain: xDomain,
       tickSize: 3,
       axis: "bottom",
       labelAnchor: "center",
@@ -533,7 +539,7 @@ async function createDistrictCards() {
     districtSummaries[d.district].totalTests += d.n;
   });
 
-  const formatValue = (val) => selectedMetric === "Test Score Levels" ? `${val?.toFixed(1)}%` : val?.toFixed(1);
+  const formatValue = (val) => val?.toFixed(1);
 
   // Create cards in the order of selection
   const cards = selected.map(district => {
@@ -550,17 +556,28 @@ async function createDistrictCards() {
     const avgValue = summary.sum / summary.count;
     const totalTests = summary.totalTests;
 
-         return html`<div class="card">
+         return html`<div class="card" style="position: relative;">
+       <button 
+         style="position: absolute; top: 8px; right: 8px; background: none; border: none; font-size: 18px; cursor: pointer; color: #666; padding: 4px; line-height: 1; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; hover:background-color: #f0f0f0;"
+         title="Remove ${district}"
+         onclick=${() => {
+           const currentSelection = selectedComponent.value;
+           const newSelection = currentSelection.filter(d => d !== district);
+           selectedComponent.value = newSelection;
+         }}
+       >×</button>
        <div style="text-align: left; margin-bottom: 20px;">
-         <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">${district}</h3>
+         <div style="margin-bottom: 8px;">
+           <h3 style="margin: 0 0 2px 0; font-size: 1.1em;">${district}</h3>
+           <div style="color: #666; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px;">
+             ${selectedMetric}
+           </div>
+         </div>
          <div style="font-size: 2.5em; font-weight: bold; color: #2563eb; margin: 8px 0 4px 0;">
            ${formatValue(avgValue)}
          </div>
-         <div style="color: #666; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px;">
-           ${selectedMetric}
-         </div>
-         <div style="font-size: 1.0em; color: #666; margin-top: 8px;">
-           ${totalTests.toLocaleString()} tests
+         <div style="color: #666; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px;">
+           ${totalTests.toLocaleString()} Tests
          </div>
        </div>
       
@@ -588,7 +605,13 @@ async function createDistrictCards() {
 
 <div>${await createDistrictCards()}</div>
 
-## About the Data
+This tool allows you to compare Massachusetts school districts across different academic performance metrics. Use the search box above to select districts and explore how they differ across subjects, grades, and years.
+
+Choose multiple school districts to compare their MCAS performance using the selected metric. Popular comparisons include neighboring districts, similar-sized districts, or districts you're considering for your family.
+
+Compare school districts across the selected metric. Each card shows the district's overall performance plus detailed breakdowns by year, subject, and grade.
+
+**About the Data**
 
 The data in these comparisons comes from the Massachusetts Comprehensive Assessment System (MCAS). The three metrics—Test Score Levels, Test Score Progress, and Race-Balanced Progress—offer different ways to understand a school district's performance.
 
@@ -598,10 +621,10 @@ The data in these comparisons comes from the Massachusetts Comprehensive Assessm
 - **Race-Balanced Progress:** This is a regression-adjusted version of Test Score Progress. It's calculated by statistically removing the relationship between a district's student demographics (specifically, the proportion of white students) and its average SGP. The goal is to isolate the district's impact on student learning from demographic factors.
 
 **Understanding the Charts:**
-- For progress metrics, the dashed line at 50 represents the state average or typical growth.
-- Districts with lines above 50 show above-average student growth.
-- Districts with lines below 50 show below-average student growth.
-- Higher values indicate stronger academic performance or growth over time.
+- For progress metrics (Test Score Progress and Race-Balanced Progress), the dashed line at 50 represents the state average or typical growth.
+- For progress metrics, districts with values above 50 show above-average student growth, while values below 50 show below-average growth.
+- For Test Score Levels, higher percentages indicate more students meeting or exceeding expectations.
+- Higher values generally indicate stronger academic performance.
 
 All data is sourced from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). To learn more about the methodology, see the [Methodology page](/methodology).
 To view detailed results for individual districts or schools, visit the [School Districts page](/data/school-districts) or [Schools page](/data/schools).
