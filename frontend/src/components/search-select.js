@@ -54,11 +54,11 @@ export function searchCheckbox(
     // Coerce data to an array so we can mutate/filter easily
     data = Array.from(data);
 
-    // Maintain the current selection as an ordered array. If the caller didn't
-    // provide an explicit value (or it's empty), fall back to what we find in
-    // the URL search params.
-    const initialSelection =
-      options.value && options.value.length ? options.value : readFromURL();
+    // Maintain the current selection as an ordered array. Prioritize URL params
+    // when they exist, otherwise fall back to the provided value.
+    const urlSelection = readFromURL();
+    const initialSelection = urlSelection.length > 0 ? urlSelection : 
+      (options.value && options.value.length ? options.value : []);
 
     let selected = Array.from(initialSelection);
 
