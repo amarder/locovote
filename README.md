@@ -1,30 +1,50 @@
 # Locovote
 
-Welcome to the source code underlying [locovote.com](https://locovote.com/). Locovote is built with [Observable Framework](https://observablehq.com/framework/) and deployed using [Cloudflare Pages](https://pages.cloudflare.com/). Feel free to share feedback on how to improve the site or even submit pull requests!
+Welcome to the source code underlying [locovote.com](https://locovote.com/) - a free open-source service that makes Massachusetts government data easier to understand and access.
 
-## Tasks
+## Contributing
 
-- [ ] Look into SAT data
-- [ ] Set up per capita view on municipalities page
-- [ ] Link schools to municipalities, figure out how to merge school data onto municipalities
-- [ ] Include participation rate in MCAS data
+Contributors wanted! Get in touch and we'll figure out how to work together.
+
+## Mission
+
+Locovote aims to:
+1. **Democratize data access** - Make government data understandable for everyone
+2. **Foster transparency** - Help citizens understand how their tax dollars are spent
+3. **Enable informed decisions** - Provide tools for better civic engagement
+
+## Architecture
+
+- **Frontend**: [Observable Framework](https://observablehq.com/framework/) - Interactive data visualizations
+- **Backend**: Python data processing pipeline
+- **Deployment**: [Cloudflare Pages](https://pages.cloudflare.com/)
+
+## 🗺️ Roadmap
+
+### Immediate Priorities
+- [ ] Add SAT data integration
+- [ ] Implement per capita views for municipalities
+- [ ] Link schools to municipalities
+- [ ] Include MCAS participation rates
 
 ### School Finances
+- [ ] Add spending per student metrics
+- [ ] Integrate school expenditure data from DOE
+- [ ] Create school district financial comparisons
 
-It would be nice to see spending per student.
+### Data Improvements
+- [ ] Add inflation adjustments to financial data
+- [ ] Add data validation and quality checks
 
-spending at each school: http://www.doe.mass.edu/finance/statistics/
+### User Experience
+- [ ] Improve mobile responsiveness
 
-https://educationtocareer.data.mass.gov/Finance-and-Budget/School-Expenditures-by-Spending-Category/i5up-aez6/about_data
+## 🐛 Issues & Support
 
-https://app.powerbigov.us/view?r=eyJrIjoiZmVkOWM4NmMtOGQyYi00ZjY0LTkwZWUtZGQyZGM3YTlhZjgxIiwidCI6IjNlODYxZDE2LTQ4YjctNGEwZS05ODA2LThjMDRkODFiN2IyYSJ9
+- **Bug Reports**: [GitHub Issues](https://github.com/amarder/locovote/issues)
+- **Feature Requests**: Open an issue with the "enhancement" label
+- **Questions**: Start a discussion in GitHub Discussions
 
-### Inflation
+---
 
-Often the money related graphs are trending up due to inflation. It would be nice to update graphs to show things in current dollars to get a better feel of what's going on.
-
-data: https://dls-gw.dor.state.ma.us/reports/rdPage.aspx?rdReport=Socioeconomic.consumer.consumerpriceindex&rdSubReport=True&rdResizeFrame=True
-
-Implicit Price Deflator and Consumer Price Index  
-Division of Local Services
-Measures of Inflation on goods and services (US Bureau of Labor Statistics)
+**Ready to help make government data more accessible?** Start by checking out the [Issues](https://github.com/amarder/locovote/issues) or [Discussions](https://github.com/amarder/locovote/discussions) to see what needs to be done!
