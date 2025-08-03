@@ -17,9 +17,315 @@ Eugenia saw Locovote and identified an opportunity to collaborate.
 
 </div>
 
+### School Demographics vs Progress by Subject
+
 ```js
-import * as Plot from "npm:@observablehq/plot";
-import SQLite from "npm:@observablehq/sqlite";
+async function createSchoolSubjectPlot() {
+  // Get school-subject level data aggregated across all years - focus on ELA and MATH only
+  const subjectData = await db.query(`
+    SELECT 
+      ORG_NAME AS school,
+      ORG_CODE AS school_code,
+      SUBJECT_CODE as subject,
+      AVG(avg_sgp) as progress,
+      100*SUM(n_white)/SUM(n) AS share_white,
+      SUM(n) as n,
+      MIN(grade) as min_grade,
+      MAX(grade) as max_grade
+    FROM mcas 
+    WHERE DIST_NAME = 'Cambridge' 
+      AND SUBSTR(ORG_CODE, -4) != '0000'
+      AND SUBJECT_CODE IN ('ELA', 'MATH')
+      AND avg_sgp IS NOT NULL 
+      AND n > 0 
+      AND n_white IS NOT NULL
+    GROUP BY ORG_NAME, ORG_CODE, SUBJECT_CODE
+    HAVING SUM(n) >= 30  -- Only include substantial sample sizes
+    ORDER BY SUBJECT_CODE, ORG_NAME
+  `);
+
+  if (subjectData.length === 0) {
+    return html`<p>No subject-level data available for Cambridge schools.</p>`;
+  }
+
+  // Add subject labels and grade level categorization
+  const subjectLabels = {"ELA": "English", "MATH": "Math"};
+  const enrichedData = subjectData.map(d => {
+    // Categorize by grade level
+    let school_level;
+    const minGrade = d.min_grade;
+    const maxGrade = d.max_grade;
+    
+    if (maxGrade <= 5) {
+      school_level = "Elementary";
+    } else if (minGrade >= 6 && maxGrade <= 8) {
+      school_level = "Middle";
+    } else if (minGrade >= 9) {
+      school_level = "High";
+    } else if (minGrade <= 5 && maxGrade >= 9) {
+      school_level = "K-12";
+    } else {
+      school_level = "Elementary and Middle";
+    }
+    
+    return {
+      ...d,
+      subject_display: subjectLabels[d.subject] || d.subject,
+      school_level
+    };
+  });
+
+  // Calculate data ranges for padding
+  const xValues = enrichedData.map(d => d.share_white);
+  const yValues = enrichedData.map(d => d.progress);
+  
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  
+  // Add 10% padding on each side
+  const xPadding = (xMax - xMin) * 0.1;
+  const yPadding = (yMax - yMin) * 0.1;
+
+  // Create the faceted plot
+  const subjectPlot = Plot.plot({
+    width: 700,
+    height: 400,
+    marginLeft: 60,
+    marginBottom: 60,
+    marginTop: 40,
+    marginRight: 40,
+    x: {
+      label: "Share White (%)",
+      grid: true,
+      domain: [Math.max(0, xMin - xPadding), Math.min(100, xMax + xPadding)]
+    },
+    y: {
+      label: "Progress (Student Growth Percentile)",
+      grid: true,
+      domain: [yMin - yPadding, yMax + yPadding]
+    },
+    fx: {
+      label: "Subject",
+      domain: ["English", "Math"]
+    },
+    color: {
+      domain: ["Elementary", "Elementary and Middle", "Middle", "High"],
+      range: ["#059669", "#2563eb", "#7c3aed", "#dc2626"],
+      legend: true
+    },
+    marks: [
+      // Reference line at 50 (typical growth)
+      Plot.ruleY([50], {stroke: "#666", strokeDasharray: "2,2", opacity: 0.5}),
+      
+      // Add trend line for each subject - no confidence band
+      Plot.linearRegressionY(enrichedData, {
+        x: "share_white", 
+        y: "progress",
+        fx: "subject_display",
+        stroke: "#dc2626",
+        strokeWidth: 2,
+        strokeOpacity: 0.5,
+        ci: 0  // Remove confidence interval/uncertainty band
+      }),
+
+              // Points for each school-subject with hover functionality
+        Plot.dot(enrichedData, {
+          x: "share_white",
+          y: "progress",
+          fx: "subject_display",
+          r: d => 200 + d.n, // Fixed larger size instead of variable sizing
+          fill: "school_level",
+          fillOpacity: 0.8,
+          stroke: "school_level",
+          strokeWidth: 2,
+          title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nProgress: ${d.progress.toFixed(1)}\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
+        }),
+
+      // School name labels on hover - using text marks for better visibility
+      Plot.text(enrichedData, {
+        x: "share_white",
+        y: "progress", 
+        fx: "subject_display",
+        text: "school",
+        fontSize: 9,
+        fill: "#333",
+        textAnchor: "middle",
+        dy: -8,
+        opacity: 0,
+        pointerEvents: "none"
+      }),
+    ]
+  });
+
+  return html`<div class="card">
+    <h3>School Demographics vs Progress: English and Math</h3>
+    <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
+      Each point represents a school's average performance in a subject (aggregated across all years). 
+      Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
+      The dashed line marks typical growth (50). Red trend lines show the relationship between demographics and progress.
+      Hover over points to see detailed information about each school.
+    </p>
+    ${subjectPlot}
+  </div>`;
+}
+
+display(await createSchoolSubjectPlot());
+```
+
+### School Demographics vs Achievement Levels: English and Math
+
+```js
+async function createSchoolLevelsPlot() {
+  // Get school-subject level data aggregated across all years - focus on ELA and MATH only
+  const levelsData = await db.query(`
+    SELECT 
+      ORG_NAME AS school,
+      ORG_CODE AS school_code,
+      SUBJECT_CODE as subject,
+      100*SUM(n_me)/SUM(n) AS pct_meeting_exceeding,
+      100*SUM(n_white)/SUM(n) AS share_white,
+      SUM(n) as n,
+      MIN(grade) as min_grade,
+      MAX(grade) as max_grade
+    FROM mcas 
+    WHERE DIST_NAME = 'Cambridge' 
+      AND SUBSTR(ORG_CODE, -4) != '0000'
+      AND SUBJECT_CODE IN ('ELA', 'MATH')
+      AND n > 0 
+      AND n_white IS NOT NULL
+      AND n_me IS NOT NULL
+    GROUP BY ORG_NAME, ORG_CODE, SUBJECT_CODE
+    HAVING SUM(n) >= 30  -- Only include substantial sample sizes
+    ORDER BY SUBJECT_CODE, ORG_NAME
+  `);
+
+  if (levelsData.length === 0) {
+    return html`<p>No levels data available for Cambridge schools.</p>`;
+  }
+
+  // Add subject labels and grade level categorization
+  const subjectLabels = {"ELA": "English", "MATH": "Math"};
+  const enrichedLevelsData = levelsData.map(d => {
+    // Categorize by grade level
+    let school_level;
+    const minGrade = d.min_grade;
+    const maxGrade = d.max_grade;
+    
+    if (maxGrade <= 5) {
+      school_level = "Elementary";
+    } else if (minGrade >= 6 && maxGrade <= 8) {
+      school_level = "Middle";
+    } else if (minGrade >= 9) {
+      school_level = "High";
+    } else if (minGrade <= 5 && maxGrade >= 9) {
+      school_level = "K-12";
+    } else {
+      school_level = "Elementary and Middle";
+    }
+    
+    return {
+      ...d,
+      subject_display: subjectLabels[d.subject] || d.subject,
+      school_level
+    };
+  });
+
+  // Calculate data ranges for padding
+  const xValues = enrichedLevelsData.map(d => d.share_white);
+  const yValues = enrichedLevelsData.map(d => d.pct_meeting_exceeding);
+  
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  
+  // Add 10% padding on each side
+  const xPadding = (xMax - xMin) * 0.1;
+  const yPadding = (yMax - yMin) * 0.1;
+
+  // Create the faceted plot
+  const levelsPlot = Plot.plot({
+    width: 700,
+    height: 400,
+    marginLeft: 60,
+    marginBottom: 60,
+    marginTop: 40,
+    marginRight: 40,
+    x: {
+      label: "Share White (%)",
+      grid: true,
+      domain: [Math.max(0, xMin - xPadding), Math.min(100, xMax + xPadding)]
+    },
+    y: {
+      label: "Meeting or Exceeding Expectations (%)",
+      grid: true,
+      domain: [Math.max(0, yMin - yPadding), Math.min(100, yMax + yPadding)]
+    },
+    fx: {
+      label: "Subject",
+      domain: ["English", "Math"]
+    },
+    color: {
+      domain: ["Elementary", "Elementary and Middle", "Middle", "High"],
+      range: ["#059669", "#2563eb", "#7c3aed", "#dc2626"],
+      legend: true
+    },
+    marks: [
+      // Add trend line for each subject - no confidence band
+      Plot.linearRegressionY(enrichedLevelsData, {
+        x: "share_white", 
+        y: "pct_meeting_exceeding",
+        fx: "subject_display",
+        stroke: "#dc2626",
+        strokeWidth: 2,
+        strokeOpacity: 0.5,
+        ci: 0  // Remove confidence interval/uncertainty band
+      }),
+
+      // Points for each school-subject with hover functionality
+      Plot.dot(enrichedLevelsData, {
+        x: "share_white",
+        y: "pct_meeting_exceeding",
+        fx: "subject_display",
+        r: d => 200 + d.n, // Same sizing as progress plot
+        fill: "school_level",
+        fillOpacity: 0.8,
+        stroke: "school_level",
+        strokeWidth: 2,
+        title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nMeeting/Exceeding: ${d.pct_meeting_exceeding.toFixed(1)}%\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
+      }),
+
+      // School name labels on hover - using text marks for better visibility
+      Plot.text(enrichedLevelsData, {
+        x: "share_white",
+        y: "pct_meeting_exceeding", 
+        fx: "subject_display",
+        text: "school",
+        fontSize: 9,
+        fill: "#333",
+        textAnchor: "middle",
+        dy: -8,
+        opacity: 0,
+        pointerEvents: "none"
+      }),
+    ]
+  });
+
+  return html`<div class="card">
+    <h3>School Demographics vs Achievement Levels: English and Math</h3>
+    <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
+      Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
+      Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
+      Red trend lines show the relationship between demographics and achievement levels.
+      Hover over points to see detailed information about each school.
+    </p>
+    ${levelsPlot}
+  </div>`;
+}
+
+display(await createSchoolLevelsPlot());
 ```
 
 ```js
@@ -27,27 +333,153 @@ const db = FileAttachment("data/mcas.db").sqlite();
 ```
 
 ```js
-// Get all Cambridge schools
-const cambridgeSchools = await db.query(`
+// Helper function for weighted linear regression (Cambridge-specific)
+function calculateWeightedLinearRegression(data, xKey, yKey, weightKey) {
+  if (data.length < 3) return null;
+
+  const n = data.length;
+  const weights = data.map(d => d[weightKey]);
+  const xValues = data.map(d => d[xKey]);
+  const yValues = data.map(d => d[yKey]);
+
+  const sumWeights = weights.reduce((sum, w) => sum + w, 0);
+  if (sumWeights === 0) return null;
+
+  const xMean = data.reduce((sum, d, i) => sum + weights[i] * d[xKey], 0) / sumWeights;
+  const yMean = data.reduce((sum, d, i) => sum + weights[i] * d[yKey], 0) / sumWeights;
+
+  const numerator = data.reduce((sum, d, i) => sum + weights[i] * (d[xKey] - xMean) * (d[yKey] - yMean), 0);
+  const denominator = data.reduce((sum, d, i) => sum + weights[i] * Math.pow(d[xKey] - xMean, 2), 0);
+
+  if (denominator === 0) return null;
+
+  const slope = numerator / denominator;
+  const intercept = yMean - slope * xMean;
+
+  return { slope, intercept };
+}
+
+// Get detailed Cambridge data for all metrics
+const cambridgeDetailedData = await db.query(`
   SELECT 
     DIST_NAME AS district, 
     ORG_NAME AS school, 
-    ORG_CODE AS school_code, 
-    MIN(grade) AS min_grade,
-    MAX(grade) AS max_grade,
-    100*SUM(n_e)/SUM(n) AS pct_e, 
-    100*SUM(n_me)/SUM(n) AS pct_me, 
-    SUM(n) as n 
+    ORG_CODE AS school_code,
+    year,
+    SUBJECT_CODE as subject,
+    grade,
+    avg_sgp,
+    n_me,
+    n_e,
+    n_white,
+    n
   FROM mcas 
-  WHERE DIST_NAME = 'Cambridge' AND SUBSTR(ORG_CODE, -4) != '0000'
-  GROUP BY DIST_NAME, ORG_NAME, ORG_CODE 
-  ORDER BY pct_me DESC, school
+  WHERE DIST_NAME = 'Cambridge' 
+    AND SUBSTR(ORG_CODE, -4) != '0000'
+    AND avg_sgp IS NOT NULL 
+    AND n > 0 
+    AND n_white IS NOT NULL 
+    AND n_me IS NOT NULL
 `);
+
+// Calculate Cambridge-specific regression parameters for race-balanced progress
+const cambridgeRegressionData = cambridgeDetailedData.map(d => ({
+  ...d,
+  prop_white: d.n > 0 ? d.n_white / d.n : 0
+}));
+
+// Group by year/subject for regression calculation
+const regressionParams = {};
+const groupedData = {};
+cambridgeRegressionData.forEach(d => {
+  const key = `${d.year}-${d.subject}`;
+  if (!groupedData[key]) groupedData[key] = [];
+  groupedData[key].push(d);
+});
+
+for (const key in groupedData) {
+  const group = groupedData[key];
+  const regression = calculateWeightedLinearRegression(group, 'prop_white', 'avg_sgp', 'n');
+  if (regression) {
+    regressionParams[key] = regression;
+  }
+}
+
+// Aggregate data by school to get all metrics
+const schoolData = {};
+cambridgeDetailedData.forEach(d => {
+  if (!schoolData[d.school_code]) {
+    schoolData[d.school_code] = {
+      district: d.district,
+      school: d.school,
+      school_code: d.school_code,
+      grades: new Set(),
+      progress_sum: 0,
+      progress_count: 0,
+      race_balanced_sum: 0,
+      race_balanced_count: 0,
+      n_white_total: 0,
+      n_total: 0,
+      n_me_total: 0,
+      n_e_total: 0
+    };
+  }
+  
+  const schoolEntry = schoolData[d.school_code];
+  schoolEntry.grades.add(d.grade);
+  
+  // Add to progress totals
+  if (d.avg_sgp !== null) {
+    schoolEntry.progress_sum += d.avg_sgp * d.n;
+    schoolEntry.progress_count += d.n;
+  }
+  
+  // Calculate race-balanced progress for this observation
+  d.prop_white = d.n > 0 ? d.n_white / d.n : 0;
+  const key = `${d.year}-${d.subject}`;
+  const params = regressionParams[key];
+  
+  if (params && d.avg_sgp !== null) {
+    const { slope, intercept } = params;
+    const predicted_sgp = slope * d.prop_white + intercept;
+    const race_balanced_progress = d.avg_sgp - predicted_sgp + 50;
+    
+    schoolEntry.race_balanced_sum += race_balanced_progress * d.n;
+    schoolEntry.race_balanced_count += d.n;
+  }
+  
+  // Add to demographic and achievement totals
+  schoolEntry.n_white_total += d.n_white;
+  schoolEntry.n_total += d.n;
+  schoolEntry.n_me_total += d.n_me;
+  schoolEntry.n_e_total += d.n_e;
+});
+
+// Convert to final school array with calculated metrics
+const cambridgeSchools = Object.values(schoolData).map(school => {
+  const gradeArray = Array.from(school.grades).sort((a, b) => a - b);
+  const min_grade = gradeArray[0];
+  const max_grade = gradeArray[gradeArray.length - 1];
+  
+  return {
+    district: school.district,
+    school: school.school,
+    school_code: school.school_code,
+    min_grade,
+    max_grade,
+    progress: school.progress_count > 0 ? school.progress_sum / school.progress_count : null,
+    race_balanced_progress: school.race_balanced_count > 0 ? school.race_balanced_sum / school.race_balanced_count : null,
+    share_white: school.n_total > 0 ? (school.n_white_total / school.n_total) * 100 : null,
+    pct_e: school.n_total > 0 ? (school.n_e_total / school.n_total) * 100 : null,
+    pct_me: school.n_total > 0 ? (school.n_me_total / school.n_total) * 100 : null,
+    n: school.n_total
+  };
+}).sort((a, b) => (b.race_balanced_progress || 0) - (a.race_balanced_progress || 0)); // Sort by race-balanced progress
 ```
 
-## Cambridge Schools Overview
+## Student Progress Analysis
 
-The table below shows all schools in the Cambridge Public Schools district, ranked by their percentage of students meeting or exceeding expectations on MCAS tests. This gives us a quick view of which schools are performing well and which might need additional support.
+The table below shows Cambridge schools ranked by their race-balanced progress scores. These metrics focus on student growth rather than absolute achievement levels, providing insight into how effectively schools are helping students improve over time.
 
 ```js
 // Add grade range formatting to schools data
@@ -58,364 +490,129 @@ const schoolsWithGradeRange = cambridgeSchools.map(school => ({
     : `Grades ${school.min_grade}-${school.max_grade}`
 }));
 
-const schoolsTable = Inputs.table(schoolsWithGradeRange, {
-  columns: ["school", "grade_range", "pct_e", "pct_me", "n"],
+const progressTable = Inputs.table(schoolsWithGradeRange, {
+  columns: ["school", "grade_range", "progress", "race_balanced_progress", "share_white", "n"],
   header: {
     "school": "School", 
     "grade_range": "Grade Levels",
-    "pct_e": "Exceeding (%)", 
-    "pct_me": "Meeting or Exceeding (%)", 
+    "progress": "Progress",
+    "race_balanced_progress": "Race-Balanced Progress", 
+    "share_white": "Share White (%)",
     "n": "# Tests"
   },
   format: {
-    pct_e: (x) => x.toFixed(1), 
-    pct_me: (x) => x.toFixed(1),
+    progress: (x) => x !== null ? x.toFixed(1) : "N/A",
+    race_balanced_progress: (x) => x !== null ? x.toFixed(1) : "N/A",
+    share_white: (x) => x !== null ? x.toFixed(1) : "N/A",
     n: (x) => x.toLocaleString()
   },
   width: {
     school: 280,
     grade_range: 120,
-    pct_e: 120,
-    pct_me: 180,
+    progress: 100,
+    race_balanced_progress: 140,
+    share_white: 120,
     n: 100
   }
 });
 
-display(schoolsTable);
+display(progressTable);
 ```
 
-## Performance Comparison
+## Achievement Levels Analysis
 
-Let's visualize how Cambridge schools compare across key performance metrics:
+This section examines the percentage of students meeting or exceeding expectations on MCAS tests. While these metrics reflect overall academic achievement, they are influenced by factors beyond school quality such as student demographics and prior preparation.
 
 ```js
-function createCambridgeComparisonChart() {
-  if (cambridgeSchools.length === 0) {
-    return html`<p>No Cambridge school data available.</p>`;
-  }
+// Create a more detailed levels analysis with additional breakdowns
+const levelsTable = Inputs.table(schoolsWithGradeRange, {
+  columns: ["school", "grade_range", "pct_me", "pct_e", "share_white", "n"],
+  header: {
+    "school": "School", 
+    "grade_range": "Grade Levels",
+    "pct_me": "Meeting/Exceeding (%)", 
+    "pct_e": "Exceeding (%)",
+    "share_white": "Share White (%)",
+    "n": "# Tests"
+  },
+  format: {
+    pct_me: (x) => x !== null ? x.toFixed(1) : "N/A",
+    pct_e: (x) => x !== null ? x.toFixed(1) : "N/A",
+    share_white: (x) => x !== null ? x.toFixed(1) : "N/A",
+    n: (x) => x.toLocaleString()
+  },
+  width: {
+    school: 280,
+    grade_range: 120,
+    pct_me: 140,
+    pct_e: 120,
+    share_white: 120,
+    n: 100
+  },
+  sort: "pct_me",
+  reverse: true
+});
 
-  // Add school level categorization
-  const schoolsWithLevel = schoolsWithGradeRange.map(school => {
-    let level;
-    const minGrade = school.min_grade;
-    const maxGrade = school.max_grade;
-    
-    if (maxGrade <= 5) {
-      level = "Elementary";
-    } else if (minGrade >= 6 && maxGrade <= 8) {
-      level = "Middle";
-    } else if (minGrade >= 9) {
-      level = "High";
-    } else if (minGrade <= 5 && maxGrade >= 9) {
-      level = "K-12";
-    } else {
-      level = "Elementary and Middle";
-    }
-    
-    return { ...school, school_level: level };
-  });
-
-  // Group schools by level and calculate actual grade ranges
-  const levelCategories = ["Elementary", "Elementary and Middle", "Middle", "High", "K-12"];
-  const schoolsByLevel = {};
-  const actualRanges = {};
-  
-  levelCategories.forEach(category => {
-    const categorySchools = schoolsWithLevel.filter(school => 
-      school.school_level === category
-    );
-    
-    if (categorySchools.length > 0) {
-      const minGrade = Math.min(...categorySchools.map(s => s.min_grade));
-      const maxGrade = Math.max(...categorySchools.map(s => s.max_grade));
-      const actualRange = minGrade === maxGrade ? `${minGrade}` : `${minGrade}-${maxGrade}`;
-      
-      const levelWithRange = `${category} (${actualRange})`;
-      schoolsByLevel[levelWithRange] = categorySchools.sort((a, b) => b.pct_me - a.pct_me);
-      actualRanges[category] = levelWithRange;
-    }
-  });
-  
-  const levelOrder = Object.keys(schoolsByLevel);
-
-  // Create separate plots for each level
-  const plots = levelOrder.map(level => {
-    const levelSchools = schoolsByLevel[level];
-    
-    if (levelSchools.length === 0) {
-      return null; // Skip empty levels
-    }
-    
-    const plot = Plot.plot({
-      width: 800,
-      height: Math.max(150, levelSchools.length * 30 + 80), // Dynamic height based on school count
-      marginLeft: 200,
-      marginBottom: 50,
-      marginTop: 40,
-      x: {
-        domain: [0, 100],
-        label: level === levelOrder[levelOrder.length - 1] ? "Percentage of Students (%)" : null // Only show x-label on last chart
-      },
-      y: {
-        label: null,
-        tickFormat: (school) => {
-          return school.length > 25 ? school.substring(0, 22) + "..." : school;
-        }
-      },
-      color: {
-        domain: ["Meeting or Exceeding", "Exceeding Only"],
-        range: ["#2563eb", "#059669"],
-        legend: level === levelOrder[0] // Only show legend on first chart
-      },
-      marks: [
-        // Meeting or exceeding (base bar)
-        Plot.barX(levelSchools, {
-          x: "pct_me",
-          y: "school",
-          fill: "#2563eb",
-          fillOpacity: 0.8,
-          title: d => `${d.school} (${d.grade_range})\nMeeting or Exceeding: ${d.pct_me.toFixed(1)}%\nExceeding: ${d.pct_e.toFixed(1)}%\nTotal Tests: ${d.n.toLocaleString()}`
-        }),
-        // Exceeding only (overlay)
-        Plot.barX(levelSchools, {
-          x: "pct_e",
-          y: "school",
-          fill: "#059669",
-          fillOpacity: 0.9,
-          title: d => `${d.school} (${d.grade_range})\nExceeding: ${d.pct_e.toFixed(1)}%`
-        })
-      ]
-    });
-    
-    return html`<div style="margin-bottom: 20px;">
-      <h4 style="margin: 0 0 10px 0; font-size: 1.1em; color: #333;">${level}</h4>
-      ${plot}
-    </div>`;
-  }).filter(plot => plot !== null); // Remove null entries
-
-  return html`<div class="card">
-    <h3>Cambridge Schools MCAS Performance Comparison by Grade Level</h3>
-    <p style="margin-bottom: 30px; color: #666; font-size: 0.9em;">
-      Schools are grouped by grade level and ranked by percentage of students meeting or exceeding expectations within each group. 
-      The dark green shows students exceeding expectations, while blue shows all students meeting or exceeding.
-    </p>
-    ${plots}
-  </div>`;
-}
-
-display(createCambridgeComparisonChart());
+display(levelsTable);
 ```
 
-## Individual School Analysis
+### Subject-Specific Achievement Analysis
 
-Select a Cambridge school below to see detailed performance trends over time:
+Let's examine how Cambridge schools perform across different subjects:
 
 ```js
-const selectedSchool = view(Inputs.select(
-  schoolsWithGradeRange,
-  {
-    label: "Choose a school:",
-    format: d => `${d.school} (${d.grade_range})`,
-    value: schoolsWithGradeRange[0] // Default to top-performing school
-  }
-));
+// Get subject-specific data for Cambridge schools
+const subjectData = await db.query(`
+  SELECT 
+    ORG_NAME AS school,
+    SUBJECT_CODE as subject,
+    100*SUM(n_me)/SUM(n) AS pct_me,
+    100*SUM(n_e)/SUM(n) AS pct_e,
+    SUM(n) as n,
+    100*SUM(n_white)/SUM(n) AS share_white
+  FROM mcas 
+  WHERE DIST_NAME = 'Cambridge' 
+    AND SUBSTR(ORG_CODE, -4) != '0000'
+    AND n > 0 AND n_me IS NOT NULL AND n_e IS NOT NULL
+  GROUP BY ORG_NAME, SUBJECT_CODE
+  HAVING SUM(n) >= 20  -- Only include substantial sample sizes
+  ORDER BY ORG_NAME, SUBJECT_CODE
+`);
+
+const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
+
+const subjectTableData = subjectData.map(d => ({
+  ...d,
+  subject_display: subjectLabels[d.subject] || d.subject
+}));
+
+const subjectTable = Inputs.table(subjectTableData, {
+  columns: ["school", "subject_display", "pct_me", "pct_e", "share_white", "n"],
+  header: {
+    "school": "School",
+    "subject_display": "Subject", 
+    "pct_me": "Meeting/Exceeding (%)",
+    "pct_e": "Exceeding (%)",
+    "share_white": "Share White (%)",
+    "n": "# Tests"
+  },
+  format: {
+    pct_me: (x) => x !== null ? x.toFixed(1) : "N/A",
+    pct_e: (x) => x !== null ? x.toFixed(1) : "N/A",
+    share_white: (x) => x !== null ? x.toFixed(1) : "N/A",
+    n: (x) => x.toLocaleString()
+  },
+  width: {
+    school: 240,
+    subject_display: 100,
+    pct_me: 140,
+    pct_e: 120,
+    share_white: 120,
+    n: 100
+  },
+  sort: "pct_me",
+  reverse: true
+});
+
+display(subjectTable);
 ```
-
-```js
-async function createSchoolDetailCharts(school) {
-  if (!school) {
-    return html`<p>Please select a school to view detailed analysis.</p>`;
-  }
-
-  // Query detailed data for the selected school
-  const detailQuery = `
-    SELECT 
-      year,
-      grade,
-      SUBJECT_CODE as subject,
-      100*SUM(n_me - n_e)/SUM(n) AS meeting_only, 
-      100*SUM(n_e)/SUM(n) AS exceeding,
-      SUM(n) as total_tests
-    FROM mcas 
-    WHERE ORG_CODE = '${school.school_code}'
-    GROUP BY year, grade, SUBJECT_CODE 
-    ORDER BY year, grade, SUBJECT_CODE
-  `;
-  
-  const detailData = await db.query(detailQuery);
-  
-  if (detailData.length === 0) {
-    return html`<p>No detailed data available for ${school.school}.</p>`;
-  }
-
-  const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
-
-  // Aggregate by year for year chart
-  const yearData = {};
-  detailData.forEach(d => {
-    if (!yearData[d.year]) {
-      yearData[d.year] = { year: d.year, exceeding: 0, meeting_only: 0, total_tests: 0 };
-    }
-    yearData[d.year].exceeding += d.exceeding * d.total_tests;
-    yearData[d.year].meeting_only += d.meeting_only * d.total_tests;
-    yearData[d.year].total_tests += d.total_tests;
-  });
-  
-  const yearAggregated = Object.values(yearData).map(d => ({
-    year: d.year,
-    exceeding: d.total_tests > 0 ? d.exceeding / d.total_tests : 0,
-    meeting_only: d.total_tests > 0 ? d.meeting_only / d.total_tests : 0
-  }));
-
-  // Aggregate by subject for subject chart
-  const subjectData = {};
-  detailData.forEach(d => {
-    if (!subjectData[d.subject]) {
-      subjectData[d.subject] = { subject: d.subject, exceeding: 0, meeting_only: 0, total_tests: 0 };
-    }
-    subjectData[d.subject].exceeding += d.exceeding * d.total_tests;
-    subjectData[d.subject].meeting_only += d.meeting_only * d.total_tests;
-    subjectData[d.subject].total_tests += d.total_tests;
-  });
-  
-  const subjectAggregated = Object.values(subjectData).map(d => ({
-    subject: d.subject,
-    exceeding: d.total_tests > 0 ? d.exceeding / d.total_tests : 0,
-    meeting_only: d.total_tests > 0 ? d.meeting_only / d.total_tests : 0
-  }));
-
-  // Create stacked data for charts
-  const yearStackedData = yearAggregated.flatMap(d => [
-    {...d, performance: "Exceeding Expectations", value: d.exceeding},
-    {...d, performance: "Meeting Expectations", value: d.meeting_only}
-  ]);
-
-  const subjectStackedData = subjectAggregated.flatMap(d => [
-    {...d, performance: "Exceeding Expectations", value: d.exceeding},
-    {...d, performance: "Meeting Expectations", value: d.meeting_only}
-  ]);
-
-  // Performance by year
-  const yearChart = Plot.plot({
-    width: 400,
-    height: 300,
-    y: {domain: [0, 100], label: "Percentage of Students (%)"},
-    x: {label: "Year", tickFormat: d => d.toString()},
-    color: {
-      domain: ["Exceeding Expectations", "Meeting Expectations"],
-      range: ["#059669", "#2563eb"],
-      legend: true
-    },
-    marks: [
-      Plot.rectY(yearStackedData, {
-        x: "year",
-        y: "value",
-        fill: "performance",
-        order: ["Exceeding Expectations", "Meeting Expectations"],
-        tip: true
-      })
-    ]
-  });
-
-  // Performance by subject
-  const subjectChart = Plot.plot({
-    width: 400,
-    height: 300,
-    y: {domain: [0, 100], label: "Percentage of Students (%)"},
-    x: {
-      label: "Subject",
-      tickFormat: d => subjectLabels[d] || d
-    },
-    color: {
-      domain: ["Exceeding Expectations", "Meeting Expectations"],
-      range: ["#059669", "#2563eb"],
-      legend: true
-    },
-    marks: [
-      Plot.rectY(subjectStackedData, {
-        x: "subject",
-        y: "value",
-        fill: "performance",
-        order: ["Exceeding Expectations", "Meeting Expectations"],
-        tip: true
-      })
-    ]
-  });
-
-  return html`<div class="grid grid-cols-2">
-    <div class="card">
-      <h3>Performance Over Time</h3>
-      ${yearChart}
-    </div>
-    <div class="card">
-      <h3>Performance by Subject</h3>
-      ${subjectChart}
-    </div>
-  </div>
-  
-  <div class="card">
-    <h3>${school.school} - Summary Statistics</h3>
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
-      <div>
-        <h4 style="margin: 0 0 5px 0; color: #666;">Meeting or Exceeding</h4>
-        <div style="font-size: 2em; font-weight: bold; color: #2563eb;">${school.pct_me.toFixed(1)}%</div>
-      </div>
-      <div>
-        <h4 style="margin: 0 0 5px 0; color: #666;">Exceeding Only</h4>
-        <div style="font-size: 2em; font-weight: bold; color: #059669;">${school.pct_e.toFixed(1)}%</div>
-      </div>
-      <div>
-        <h4 style="margin: 0 0 5px 0; color: #666;">Total Tests</h4>
-        <div style="font-size: 2em; font-weight: bold; color: #333;">${school.n.toLocaleString()}</div>
-      </div>
-    </div>
-  </div>`;
-}
-
-display(await createSchoolDetailCharts(selectedSchool));
-```
-
-## Key Insights
-
-```js
-function generateInsights() {
-  if (schoolsWithGradeRange.length === 0) {
-    return html`<p>No data available for analysis.</p>`;
-  }
-
-  const sorted = [...schoolsWithGradeRange].sort((a, b) => b.pct_me - a.pct_me);
-  const topSchools = sorted.slice(0, 3);
-  const bottomSchools = sorted.slice(-3).reverse();
-  
-  const avgMeeting = schoolsWithGradeRange.reduce((sum, s) => sum + s.pct_me, 0) / schoolsWithGradeRange.length;
-  const avgExceeding = schoolsWithGradeRange.reduce((sum, s) => sum + s.pct_e, 0) / schoolsWithGradeRange.length;
-
-  return html`<div class="note" label="Data-Driven Insights">
-    
-    **Top Performing Schools** (by % meeting or exceeding expectations):
-    ${topSchools.map(s => html`<br/>• ${s.school} (${s.grade_range}): ${s.pct_me.toFixed(1)}% (${s.pct_e.toFixed(1)}% exceeding)`)}
-    
-    **Schools with Room for Improvement:**
-    ${bottomSchools.map(s => html`<br/>• ${s.school} (${s.grade_range}): ${s.pct_me.toFixed(1)}% (${s.pct_e.toFixed(1)}% exceeding)`)}
-    
-    **District Averages:**
-    <br/>• Meeting or Exceeding Expectations: ${avgMeeting.toFixed(1)}%
-    <br/>• Exceeding Expectations: ${avgExceeding.toFixed(1)}%
-    
-    **Total Cambridge Schools:** ${schoolsWithGradeRange.length}
-
-  </div>`;
-}
-
-display(generateInsights());
-```
-
-## About the Data
-
-This analysis uses MCAS (Massachusetts Comprehensive Assessment System) data from the [Massachusetts Department of Elementary and Secondary Education](https://educationtocareer.data.mass.gov/Assessment-and-Accountability/MCAS-Achievement-Results/i9w6-niyt/about_data). The data includes test results across multiple years, grade levels, and subject areas.
-
-**Performance Levels:**
-- **Meeting or Exceeding Expectations:** Students who meet the minimum proficiency requirements for their grade level
-- **Exceeding Expectations:** Students who demonstrate advanced understanding beyond grade-level standards
-
-For more detailed analysis tools, explore the [Compare School Districts](/school-districts) page or the comprehensive [Schools](/data/schools) database.
