@@ -17,7 +17,7 @@ Eugenia saw Locovote and identified an opportunity to collaborate.
 
 </div>
 
-### School Demographics vs Progress by Subject
+## Test Score Progress
 
 ```js
 async function createSchoolSubjectPlot() {
@@ -27,9 +27,9 @@ async function createSchoolSubjectPlot() {
       ORG_NAME AS school,
       ORG_CODE AS school_code,
       SUBJECT_CODE as subject,
-      AVG(avg_sgp) as progress,
+      SUM(avg_sgp * avg_sgp_incl) / SUM(avg_sgp_incl) as progress,
       100*SUM(n_white)/SUM(n) AS share_white,
-      SUM(n) as n,
+      SUM(avg_sgp_incl) as n,
       MIN(grade) as min_grade,
       MAX(grade) as max_grade
     FROM mcas 
@@ -40,9 +40,9 @@ async function createSchoolSubjectPlot() {
       AND n > 0 
       AND n_white IS NOT NULL
     GROUP BY ORG_NAME, ORG_CODE, SUBJECT_CODE
-    HAVING SUM(n) >= 30  -- Only include substantial sample sizes
     ORDER BY SUBJECT_CODE, ORG_NAME
   `);
+  // console.log(subjectData);
 
   if (subjectData.length === 0) {
     return html`<p>No subject-level data available for Cambridge schools.</p>`;
@@ -174,7 +174,7 @@ async function createSchoolSubjectPlot() {
 display(await createSchoolSubjectPlot());
 ```
 
-### School Demographics vs Achievement Levels: English and Math
+## Test Score Levels
 
 ```js
 async function createSchoolLevelsPlot() {
@@ -197,13 +197,13 @@ async function createSchoolLevelsPlot() {
       AND n_white IS NOT NULL
       AND n_me IS NOT NULL
     GROUP BY ORG_NAME, ORG_CODE, SUBJECT_CODE
-    HAVING SUM(n) >= 30  -- Only include substantial sample sizes
     ORDER BY SUBJECT_CODE, ORG_NAME
   `);
 
   if (levelsData.length === 0) {
     return html`<p>No levels data available for Cambridge schools.</p>`;
   }
+  // console.log(levelsData);
 
   // Add subject labels and grade level categorization
   const subjectLabels = {"ELA": "English", "MATH": "Math"};
@@ -477,142 +477,124 @@ const cambridgeSchools = Object.values(schoolData).map(school => {
 }).sort((a, b) => (b.race_balanced_progress || 0) - (a.race_balanced_progress || 0)); // Sort by race-balanced progress
 ```
 
-## Student Progress Analysis
-
-The table below shows Cambridge schools ranked by their race-balanced progress scores. These metrics focus on student growth rather than absolute achievement levels, providing insight into how effectively schools are helping students improve over time.
+## The Data
 
 ```js
-// Add grade range formatting to schools data
-const schoolsWithGradeRange = cambridgeSchools.map(school => ({
-  ...school,
-  grade_range: school.min_grade === school.max_grade 
-    ? `Grade ${school.min_grade}` 
-    : `Grades ${school.min_grade}-${school.max_grade}`
-}));
-
-const progressTable = Inputs.table(schoolsWithGradeRange, {
-  columns: ["school", "grade_range", "progress", "race_balanced_progress", "share_white", "n"],
-  header: {
-    "school": "School", 
-    "grade_range": "Grade Levels",
-    "progress": "Progress",
-    "race_balanced_progress": "Race-Balanced Progress", 
-    "share_white": "Share White (%)",
-    "n": "# Tests"
-  },
-  format: {
-    progress: (x) => x !== null ? x.toFixed(1) : "N/A",
-    race_balanced_progress: (x) => x !== null ? x.toFixed(1) : "N/A",
-    share_white: (x) => x !== null ? x.toFixed(1) : "N/A",
-    n: (x) => x.toLocaleString()
-  },
-  width: {
-    school: 280,
-    grade_range: 120,
-    progress: 100,
-    race_balanced_progress: 140,
-    share_white: 120,
-    n: 100
-  }
-});
-
-display(progressTable);
-```
-
-## Achievement Levels Analysis
-
-This section examines the percentage of students meeting or exceeding expectations on MCAS tests. While these metrics reflect overall academic achievement, they are influenced by factors beyond school quality such as student demographics and prior preparation.
-
-```js
-// Create a more detailed levels analysis with additional breakdowns
-const levelsTable = Inputs.table(schoolsWithGradeRange, {
-  columns: ["school", "grade_range", "pct_me", "pct_e", "share_white", "n"],
-  header: {
-    "school": "School", 
-    "grade_range": "Grade Levels",
-    "pct_me": "Meeting/Exceeding (%)", 
-    "pct_e": "Exceeding (%)",
-    "share_white": "Share White (%)",
-    "n": "# Tests"
-  },
-  format: {
-    pct_me: (x) => x !== null ? x.toFixed(1) : "N/A",
-    pct_e: (x) => x !== null ? x.toFixed(1) : "N/A",
-    share_white: (x) => x !== null ? x.toFixed(1) : "N/A",
-    n: (x) => x.toLocaleString()
-  },
-  width: {
-    school: 280,
-    grade_range: 120,
-    pct_me: 140,
-    pct_e: 120,
-    share_white: 120,
-    n: 100
-  },
-  sort: "pct_me",
-  reverse: true
-});
-
-display(levelsTable);
-```
-
-### Subject-Specific Achievement Analysis
-
-Let's examine how Cambridge schools perform across different subjects:
-
-```js
-// Get subject-specific data for Cambridge schools
-const subjectData = await db.query(`
+// Get comprehensive school-subject level data with all metrics
+const comprehensiveData = await db.query(`
   SELECT 
     ORG_NAME AS school,
+    ORG_CODE AS school_code,
     SUBJECT_CODE as subject,
-    100*SUM(n_me)/SUM(n) AS pct_me,
-    100*SUM(n_e)/SUM(n) AS pct_e,
-    SUM(n) as n,
-    100*SUM(n_white)/SUM(n) AS share_white
+    SUM(avg_sgp * avg_sgp_incl) / SUM(avg_sgp_incl) as progress,
+    100*SUM(n_me)/SUM(n) AS levels,
+    100*SUM(n_white)/SUM(n) AS share_white,
+    SUM(avg_sgp_incl) as sum_avg_sgp_incl,
+    SUM(n) as n_tests
   FROM mcas 
   WHERE DIST_NAME = 'Cambridge' 
     AND SUBSTR(ORG_CODE, -4) != '0000'
-    AND n > 0 AND n_me IS NOT NULL AND n_e IS NOT NULL
-  GROUP BY ORG_NAME, SUBJECT_CODE
+    AND SUBJECT_CODE IN ('ELA', 'MATH', 'SCI')
+    AND avg_sgp IS NOT NULL 
+    AND n > 0 
+    AND n_white IS NOT NULL
+    AND n_me IS NOT NULL
+  GROUP BY ORG_NAME, ORG_CODE, SUBJECT_CODE
   HAVING SUM(n) >= 20  -- Only include substantial sample sizes
   ORDER BY ORG_NAME, SUBJECT_CODE
 `);
 
-const subjectLabels = {"ELA": "English", "MATH": "Math", "SCI": "Science"};
+// Calculate race-balanced progress for each school-subject combination
+const comprehensiveDataWithRaceBalanced = comprehensiveData.map(d => {
+  const prop_white = d.share_white / 100;
+  
+  // Find the regression parameters for this subject across all Cambridge observations
+  const subjectKey = d.subject;
+  let race_balanced_progress = null;
+  
+  // Simple approach: use the overall Cambridge regression slope for the subject
+  // This is a simplified version - in practice you'd want the full regression analysis
+  const cambridgeSubjectData = cambridgeDetailedData.filter(cd => cd.subject === d.subject);
+  if (cambridgeSubjectData.length > 0) {
+    const regression = calculateWeightedLinearRegression(
+      cambridgeSubjectData.map(cd => ({
+        ...cd,
+        prop_white: cd.n > 0 ? cd.n_white / cd.n : 0
+      })), 
+      'prop_white', 
+      'avg_sgp', 
+      'n'
+    );
+    
+    if (regression && d.progress !== null) {
+      const { slope, intercept } = regression;
+      const predicted_sgp = slope * prop_white + intercept;
+      race_balanced_progress = d.progress - predicted_sgp + 50;
+    }
+  }
+  
+  return {
+    ...d,
+    race_balanced_progress,
+    subject_display: {"ELA": "English", "MATH": "Math", "SCI": "Science"}[d.subject] || d.subject
+  };
+});
 
-const subjectTableData = subjectData.map(d => ({
-  ...d,
-  subject_display: subjectLabels[d.subject] || d.subject
-}));
-
-const subjectTable = Inputs.table(subjectTableData, {
-  columns: ["school", "subject_display", "pct_me", "pct_e", "share_white", "n"],
+const comprehensiveTable = Inputs.table(comprehensiveDataWithRaceBalanced, {
+  columns: ["school", "subject_display", "progress", "race_balanced_progress", "sum_avg_sgp_incl", "levels", "n_tests", "share_white"],
   header: {
     "school": "School",
     "subject_display": "Subject", 
-    "pct_me": "Meeting/Exceeding (%)",
-    "pct_e": "Exceeding (%)",
-    "share_white": "Share White (%)",
-    "n": "# Tests"
+    "progress": "Progress",
+    "race_balanced_progress": "Race-Balanced Progress",
+    "sum_avg_sgp_incl": "# Tests (Progress)",
+    "levels": "Levels (%)",
+    "n_tests": "# Tests (Levels)",
+    "share_white": "Share White (%)"
   },
   format: {
-    pct_me: (x) => x !== null ? x.toFixed(1) : "N/A",
-    pct_e: (x) => x !== null ? x.toFixed(1) : "N/A",
-    share_white: (x) => x !== null ? x.toFixed(1) : "N/A",
-    n: (x) => x.toLocaleString()
+    progress: (x) => x !== null ? x.toFixed(1) : "N/A",
+    race_balanced_progress: (x) => x !== null ? x.toFixed(1) : "N/A",
+    sum_avg_sgp_incl: (x) => x !== null ? x.toLocaleString() : "N/A",
+    levels: (x) => x !== null ? x.toFixed(1) : "N/A",
+    n_tests: (x) => x.toLocaleString(),
+    share_white: (x) => x !== null ? x.toFixed(1) : "N/A"
   },
   width: {
-    school: 240,
-    subject_display: 100,
-    pct_me: 140,
-    pct_e: 120,
-    share_white: 120,
-    n: 100
+    school: 220,
+    subject_display: 80,
+    progress: 80,
+    race_balanced_progress: 120,
+    sum_avg_sgp_incl: 110,
+    levels: 80,
+    n_tests: 80,
+    share_white: 100
   },
-  sort: "pct_me",
+  sort: "race_balanced_progress",
   reverse: true
 });
 
-display(subjectTable);
+display(comprehensiveTable);
 ```
+
+## Caveats
+
+We probably need to look into participation rates in the MCAS testing. That's a place where the numbers might be missing something.
+
+If we want to get a sense of the high school we'll need to look to neighboring school districts to make a comparison. I'm not sure which school districts would be most comparable.
+
+It's funny, I lived literally next door to Amigos School and only realized from looking at the data that they have both elementary and middle school students. They're doing great. It would probably be smart to split them out in the data.
+
+## Conclusions
+
+Holy moly, Dr. Martin Luther King, Jr. School is special. It's nice to see they were named a [2024 National Blue Ribbon School](https://mlk.cpsd.us/school_news/cps_school_2024_national_blue_ribbon_school).
+
+> "Cambridge Public Schools is proud to announce that the U.S. Department of Education has recognized the Dr. Martin Luther King, Jr. School as a 2024 National Blue Ribbon School (NBRS), receiving acclaim for the school's progress in closing student achievement gaps. Only nine schools in the state were recognized as a 2024 National Blue Ribbon School."
+
+The MCAS test scores coming out of Fletcher Maynard Academy and Kennedy-Longfellow are concerning. Kennedy-Longfellow School has [closed](https://www.cambridgeday.com/2025/05/27/as-kennedy-longfellow-school-nears-closing-community-seeks-memories-for-final-events/). Thinking about what would help the children at Fletcher Maynard Academy could be really impactful.
+
+In terms of test score levels, King Open doesn't look great, but when we look at test score progress they're doing a solid job helping the students keep up with the state average.
+
+Of the five middle schools, Cambridge Street Upper School looks to have the most room for improvement.
+
+Vassal Lane Upper School is making a lot of progress on math, it might be informative to learn from their approach to teaching math.
