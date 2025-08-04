@@ -43,7 +43,10 @@ export default {
       {name: "Tax Levies by Class", path: "/data/tax-levies"},
       {name: "Tax Rates by Class", path: "/data/tax-rates"},
       {name: "Population", path: "/data/population"},
-    ]}
+    ]},
+    {name: "Analysis", open: false, pages: [
+      {name: "Cambridge Public Schools", path: "/analysis/cambridge-public-schools"},
+    ]},
   ],
 
   // Content to add to the head of the page, e.g. for a favicon:

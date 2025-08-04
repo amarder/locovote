@@ -329,7 +329,7 @@ display(await createSchoolLevelsPlot());
 ```
 
 ```js
-const db = FileAttachment("data/mcas.db").sqlite();
+const db = FileAttachment("/data/mcas.db").sqlite();
 ```
 
 ```js
