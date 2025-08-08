@@ -5,17 +5,19 @@ toc: true
 
 # Cambridge Public Schools
 
-My very thoughtful friend [Eugenia](https://www.voteeugenia.com/) is running for School Committee in Cambridge. I think her slogan is right on:
+My very thoughtful friend [Eugenia](https://www.voteeugenia.com/) is running for School Committee in Cambridge. I'm a big fan of her and her slogan:
 
 > "Every child deserves a **great** education."
 
-Eugenia saw Locovote and identified an opportunity to collaborate.
+Eugenia saw Locovote and thought there might be an opportunity to collaborate.
 
 <div class="tip" label="Key Question">
 
 **Based on the data we have, which schools in Cambridge should we be looking up to / which schools have room for improvement?**
 
 </div>
+
+For Cambridge, I think it makes sense to compare schools using test score progress and race-balanced progress measures. I include test score levels as this is how schools are often compared. If you're curious to learn more about the pros and cons of the various measures see the [school metrics page](/school-metrics).
 
 ## Test Score Progress
 
@@ -102,12 +104,12 @@ async function createSchoolSubjectPlot() {
       domain: [Math.max(0, xMin - xPadding), Math.min(100, xMax + xPadding)]
     },
     y: {
-      label: "Progress (Student Growth Percentile)",
+      label: "Average Student Growth Percentile",
       grid: true,
       domain: [yMin - yPadding, yMax + yPadding]
     },
     fx: {
-      label: "Subject",
+      label: "",
       domain: ["English", "Math"]
     },
     color: {
@@ -160,11 +162,11 @@ async function createSchoolSubjectPlot() {
   });
 
   return html`<div class="card">
-    <h3>School Demographics vs Progress: English and Math</h3>
+    <h3>Test Score Progress vs School Demographics by Subject</h3>
     <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
-      Each point represents a school's average performance in a subject (aggregated across all years). 
+      Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
-      The dashed line marks typical growth (50). Red trend lines show the relationship between demographics and progress.
+      The dashed line marks typical growth (50). Red trend lines show the relationship between demographics and growth.
       Hover over points to see detailed information about each school.
     </p>
     ${subjectPlot}
@@ -264,7 +266,7 @@ async function createSchoolLevelsPlot() {
       domain: [Math.max(0, yMin - yPadding), Math.min(100, yMax + yPadding)]
     },
     fx: {
-      label: "Subject",
+      label: "",
       domain: ["English", "Math"]
     },
     color: {
@@ -314,7 +316,7 @@ async function createSchoolLevelsPlot() {
   });
 
   return html`<div class="card">
-    <h3>School Demographics vs Achievement Levels: English and Math</h3>
+    <h3>Test Score Levels vs School Demographics by Subject</h3>
     <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
@@ -329,7 +331,7 @@ display(await createSchoolLevelsPlot());
 ```
 
 ```js
-const db = FileAttachment("/data/mcas.db").sqlite();
+const db = FileAttachment("/data/cambridge.db").sqlite();
 ```
 
 ```js
@@ -494,13 +496,8 @@ const comprehensiveData = await db.query(`
   FROM mcas 
   WHERE DIST_NAME = 'Cambridge' 
     AND SUBSTR(ORG_CODE, -4) != '0000'
-    AND SUBJECT_CODE IN ('ELA', 'MATH', 'SCI')
-    AND avg_sgp IS NOT NULL 
-    AND n > 0 
-    AND n_white IS NOT NULL
-    AND n_me IS NOT NULL
+    AND SUBJECT_CODE IN ('ELA', 'MATH')
   GROUP BY ORG_NAME, ORG_CODE, SUBJECT_CODE
-  HAVING SUM(n) >= 20  -- Only include substantial sample sizes
   ORDER BY ORG_NAME, SUBJECT_CODE
 `);
 
@@ -583,7 +580,7 @@ We probably need to look into participation rates in the MCAS testing. That's a 
 
 If we want to get a sense of the high school we'll need to look to neighboring school districts to make a comparison. I'm not sure which school districts would be most comparable.
 
-It's funny, I lived literally next door to Amigos School and only realized from looking at the data that they have both elementary and middle school students. They're doing great. It would probably be smart to split them out in the data.
+It's funny, I lived directly next door to Amigos School and only realized from looking at the data that they have both elementary and middle school students. They're doing great. It would probably be smart to split them out in the data.
 
 ## Conclusions
 
