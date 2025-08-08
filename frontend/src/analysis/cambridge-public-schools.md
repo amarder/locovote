@@ -17,7 +17,7 @@ Eugenia saw Locovote and thought there might be an opportunity to collaborate.
 
 </div>
 
-For Cambridge, I think it makes sense to compare schools using test score progress and race-balanced progress measures. I include test score levels as this is how schools are often compared. If you're curious to learn more about the pros and cons of the various measures see the [school metrics page](/school-metrics).
+For Cambridge, I think it makes sense to compare schools using test score progress and race-balanced progress measures. I include test score levels since this is how schools are often compared. If you're curious to learn more about the pros and cons of the various measures see the [school metrics page](/school-metrics).
 
 ## Test Score Progress
 
@@ -152,7 +152,7 @@ async function createSchoolSubjectPlot() {
     <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
       Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
-      The dashed line marks typical growth (50). Red trend lines show the relationship between demographics and growth.
+      The dashed line marks typical growth (50). Red trend lines show the correlation between demographics and growth.
       Hover over points to see detailed information about each school.
     </p>
     ${subjectPlot}
@@ -292,7 +292,7 @@ async function createSchoolLevelsPlot() {
     <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
-      Red trend lines show the relationship between demographics and achievement levels.
+      Red trend lines show the correlation between demographics and achievement levels.
       Hover over points to see detailed information about each school.
     </p>
     ${levelsPlot}
@@ -565,24 +565,26 @@ const comprehensiveTable = Inputs.table(comprehensiveDataWithRaceBalanced, {
 display(comprehensiveTable);
 ```
 
-## Caveats
-
-We probably need to look into participation rates in the MCAS testing. That's a place where the numbers might be missing something.
-
-If we want to get a sense of the high school we'll need to look to neighboring school districts to make a comparison. I'm not sure which school districts would be most comparable.
-
-It's funny, I lived directly next door to Amigos School and only realized from looking at the data that they have both elementary and middle school students. They're doing great. It would probably be smart to split them out in the data.
-
 ## Conclusions
 
-Holy moly, Dr. Martin Luther King, Jr. School is special. It's nice to see they were named a [2024 National Blue Ribbon School](https://mlk.cpsd.us/school_news/cps_school_2024_national_blue_ribbon_school).
+The MCAS test scores coming out of Kennedy-Longfellow and Fletcher Maynard Academy are concerning. Kennedy-Longfellow School has [closed](https://www.cambridgeday.com/2025/05/27/as-kennedy-longfellow-school-nears-closing-community-seeks-memories-for-final-events/). Thinking about what would help the children at Fletcher Maynard Academy could be really impactful.
+
+Dr. Martin Luther King, Jr. School is really good. It's nice to see they were named a [2024 National Blue Ribbon School](https://mlk.cpsd.us/school_news/cps_school_2024_national_blue_ribbon_school).
 
 > "Cambridge Public Schools is proud to announce that the U.S. Department of Education has recognized the Dr. Martin Luther King, Jr. School as a 2024 National Blue Ribbon School (NBRS), receiving acclaim for the school's progress in closing student achievement gaps. Only nine schools in the state were recognized as a 2024 National Blue Ribbon School."
 
-The MCAS test scores coming out of Fletcher Maynard Academy and Kennedy-Longfellow are concerning. Kennedy-Longfellow School has [closed](https://www.cambridgeday.com/2025/05/27/as-kennedy-longfellow-school-nears-closing-community-seeks-memories-for-final-events/). Thinking about what would help the children at Fletcher Maynard Academy could be really impactful.
+Amigos School is also very good (I didn't realize they teach both elementary and middle school students).
 
-In terms of test score levels, King Open doesn't look great, but when we look at test score progress they're doing a solid job helping the students keep up with the state average.
+The test score progress at Haggerty is great, but the test score levels are a little disappointing. I wonder if their curriculum is too easy in grades 3 and below.
+
+In terms of test score levels, King Open doesn't look great, but when we look at test score progress they're doing an okay job helping students keep up with the state average.
 
 Of the five middle schools, Cambridge Street Upper School looks to have the most room for improvement.
 
 Vassal Lane Upper School is making a lot of progress on math, it might be informative to learn from their approach to teaching math.
+
+<div class="tip" label="Thanks">
+
+When reviewing the first draft of this analysis, Eugenia "Eagle Eyes" Schraa Huh noticed that the number of tests reported for Kennedy-Longfellow and Fletcher/Maynard Academy were way too low. I dug deeper into the data and found that groups with fewer than 10 students are omitted from the data (to protect their privacy). I modified the code to move away from "school-year-grade" analyses to "school-year" analyses. Now what is presented on this page should be consistent with the [DESE School and District Profiles](https://profiles.doe.mass.edu/mcas/achievement_level.aspx?linkid=32&orgcode=00490040&orgtypecode=6&).
+
+</div>
