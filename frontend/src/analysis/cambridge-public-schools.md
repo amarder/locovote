@@ -50,25 +50,11 @@ async function createSchoolSubjectPlot() {
     return html`<p>No subject-level data available for Cambridge schools.</p>`;
   }
 
-  // Add subject labels and grade level categorization
+  // Add subject labels and use schoolTypes object for categorization
   const subjectLabels = {"ELA": "English", "MATH": "Math"};
   const enrichedData = subjectData.map(d => {
-    // Categorize by grade level
-    let school_level;
-    const minGrade = d.min_grade;
-    const maxGrade = d.max_grade;
-    
-    if (maxGrade <= 5) {
-      school_level = "Elementary";
-    } else if (minGrade >= 6 && maxGrade <= 8) {
-      school_level = "Middle";
-    } else if (minGrade >= 9) {
-      school_level = "High";
-    } else if (minGrade <= 5 && maxGrade >= 9) {
-      school_level = "K-12";
-    } else {
-      school_level = "Elementary and Middle";
-    }
+    // Use predefined schoolTypes object instead of calculating from grades
+    const school_level = schoolTypes[d.school] || "Unknown";
     
     return {
       ...d,
@@ -207,25 +193,11 @@ async function createSchoolLevelsPlot() {
   }
   // console.log(levelsData);
 
-  // Add subject labels and grade level categorization
+  // Add subject labels and use schoolTypes object for categorization
   const subjectLabels = {"ELA": "English", "MATH": "Math"};
   const enrichedLevelsData = levelsData.map(d => {
-    // Categorize by grade level
-    let school_level;
-    const minGrade = d.min_grade;
-    const maxGrade = d.max_grade;
-    
-    if (maxGrade <= 5) {
-      school_level = "Elementary";
-    } else if (minGrade >= 6 && maxGrade <= 8) {
-      school_level = "Middle";
-    } else if (minGrade >= 9) {
-      school_level = "High";
-    } else if (minGrade <= 5 && maxGrade >= 9) {
-      school_level = "K-12";
-    } else {
-      school_level = "Elementary and Middle";
-    }
+    // Use predefined schoolTypes object instead of calculating from grades
+    const school_level = schoolTypes[d.school] || "Unknown";
     
     return {
       ...d,
@@ -332,6 +304,25 @@ display(await createSchoolLevelsPlot());
 
 ```js
 const db = FileAttachment("/data/cambridge.db").sqlite();
+const schoolTypes = {
+  "Amigos School": "Elementary and Middle",
+  "Cambridge Rindge and Latin": "High",
+  "Cambridge Street Upper School": "Middle",
+  "Cambridgeport": "Elementary",
+  "Fletcher/Maynard Academy": "Elementary",
+  "Graham and Parks": "Elementary",
+  "Haggerty": "Elementary",
+  "John M Tobin": "Elementary",
+  "Kennedy-Longfellow": "Elementary",
+  "King Open": "Elementary",
+  "Maria L. Baldwin": "Elementary",
+  "Martin Luther King Jr.": "Elementary",
+  "Morse": "Elementary",
+  "Peabody": "Elementary",
+  "Putnam Avenue Upper School": "Middle",
+  "Rindge Avenue Upper School": "Middle",
+  "Vassal Lane Upper School": "Middle"
+};
 ```
 
 ```js
