@@ -13,7 +13,7 @@ Eugenia saw Locovote and thought there might be an opportunity to collaborate.
 
 <div class="tip" label="Key Question">
 
-**Based on the data we have, which schools in Cambridge should we be looking up to / which schools have room for improvement?**
+**Based on the data we have, which schools in Cambridge should we be looking up to, and which schools have room for improvement?**
 
 </div>
 
@@ -118,7 +118,7 @@ async function createSchoolSubjectPlot() {
         ci: 0  // Remove confidence interval/uncertainty band
       }),
 
-              // Points for each school-subject with hover functionality
+      // Points for each school-subject with hover functionality
         Plot.dot(enrichedData, {
           x: "share_white",
           y: "progress",
@@ -567,7 +567,7 @@ display(comprehensiveTable);
 
 ## Conclusions
 
-The MCAS test scores coming out of Kennedy-Longfellow and Fletcher Maynard Academy are concerning. Kennedy-Longfellow School has [closed](https://www.cambridgeday.com/2025/05/27/as-kennedy-longfellow-school-nears-closing-community-seeks-memories-for-final-events/). Thinking about what would help the children at Fletcher Maynard Academy could be really impactful.
+The MCAS test scores coming out of Kennedy-Longfellow and Fletcher Maynard Academy are concerning. Kennedy-Longfellow has [closed](https://www.cambridgeday.com/2025/05/27/as-kennedy-longfellow-school-nears-closing-community-seeks-memories-for-final-events/). Thinking about what would help the children at Fletcher Maynard could be really impactful.
 
 Dr. Martin Luther King, Jr. School is really good. It's nice to see they were named a [2024 National Blue Ribbon School](https://mlk.cpsd.us/school_news/cps_school_2024_national_blue_ribbon_school).
 
@@ -577,7 +577,7 @@ Amigos School is also very good (I didn't realize they teach both elementary and
 
 The test score progress at Haggerty is great, but the test score levels are a little disappointing. I wonder if their curriculum is too easy in grades 3 and below.
 
-In terms of test score levels, King Open doesn't look great, but when we look at test score progress they're doing an okay job helping students keep up with the state average.
+In terms of test score levels, King Open doesn't look great, but when we look at test score progress they're doing an okay job helping students keep up with the state average growth.
 
 Of the five middle schools, Cambridge Street Upper School looks to have the most room for improvement.
 
@@ -585,6 +585,6 @@ Vassal Lane Upper School is making a lot of progress on math, it might be inform
 
 <div class="tip" label="Thanks">
 
-When reviewing the first draft of this analysis, Eugenia "Eagle Eyes" Schraa Huh noticed that the number of tests reported for Kennedy-Longfellow and Fletcher/Maynard Academy were way too low. I dug deeper into the data and found that groups with fewer than 10 students are omitted from the data (to protect their privacy). I modified the code to move away from "school-year-grade" analyses to "school-year" analyses. Now what is presented on this page should be consistent with the [DESE School and District Profiles](https://profiles.doe.mass.edu/mcas/achievement_level.aspx?linkid=32&orgcode=00490040&orgtypecode=6&).
+When reviewing the first draft of this analysis, Eugenia "Eagle Eyes" Schraa Huh noticed that the number of tests reported for Kennedy-Longfellow and Fletcher Maynard Academy were way too low. I dug deeper into the data and found that groups with fewer than 10 students are omitted from the data (to protect student privacy). I modified the code to move away from "school-year-grade" analyses to "school-year" analyses. Now what is presented on this page should be consistent with the [DESE School and District Profiles](https://profiles.doe.mass.edu/mcas/achievement_level.aspx?linkid=32&orgcode=00490040&orgtypecode=6&).
 
 </div>
