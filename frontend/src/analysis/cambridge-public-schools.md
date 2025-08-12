@@ -76,6 +76,9 @@ async function createSchoolSubjectPlot() {
   const xPadding = (xMax - xMin) * 0.1;
   const yPadding = (yMax - yMin) * 0.1;
 
+  // Debug: Check a few data points
+  console.log("Sample enrichedData points:", enrichedData.slice(0, 3));
+  
   // Create the faceted plot
   const subjectPlot = Plot.plot({
     width: 700,
@@ -103,11 +106,15 @@ async function createSchoolSubjectPlot() {
       range: ["#059669", "#2563eb", "#7c3aed", "#dc2626"],
       legend: true
     },
+    r: {
+      type: "identity", // Use raw values directly without sqrt scaling
+      range: [3, 12] // Minimum and maximum radius in pixels
+    },
     marks: [
-      // Reference line at 50 (typical growth)
+      // Reference line at 50 (typical growth) - bottom layer
       Plot.ruleY([50], {stroke: "#666", strokeDasharray: "2,2", opacity: 0.5}),
       
-      // Add trend line for each subject - no confidence band
+      // Add trend line for each subject - middle layer
       Plot.linearRegressionY(enrichedData, {
         x: "share_white", 
         y: "progress",
@@ -118,34 +125,25 @@ async function createSchoolSubjectPlot() {
         ci: 0  // Remove confidence interval/uncertainty band
       }),
 
-      // Points for each school-subject with hover functionality
-        Plot.dot(enrichedData, {
-          x: "share_white",
-          y: "progress",
-          fx: "subject_display",
-          r: d => 200 + d.n, // Fixed larger size instead of variable sizing
-          fill: "school_level",
-          fillOpacity: 0.8,
-          stroke: "school_level",
-          strokeWidth: 2,
-          title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nProgress: ${d.progress.toFixed(1)}\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
-        }),
-
-      // School name labels on hover - using text marks for better visibility
-      Plot.text(enrichedData, {
+      // Points for each school-subject with hover functionality - top layer
+      Plot.dot(enrichedData, {
         x: "share_white",
-        y: "progress", 
+        y: "progress",
         fx: "subject_display",
-        text: "school",
-        fontSize: 9,
-        fill: "#333",
-        textAnchor: "middle",
-        dy: -8,
-        opacity: 0,
-        pointerEvents: "none"
+        r: d => 4 + d.n / 500,
+        fill: "school_level",
+        fillOpacity: 1.0, // Full opacity for clear visibility
+        stroke: "black", // Small black stroke on the outside
+        strokeWidth: 1,
+        title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nProgress: ${d.progress.toFixed(1)}\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
       }),
+
+
     ]
   });
+
+  // Apply auto-labeling to the plot
+  const plotWithLabels = addSchoolLabels(subjectPlot, enrichedData, "share_white", "progress", "school");
 
   return html`<div class="card">
     <h3>Test Score Progress vs School Demographics by Subject</h3>
@@ -153,9 +151,9 @@ async function createSchoolSubjectPlot() {
       Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       The dashed line marks typical growth (50). Red trend lines show the correlation between demographics and growth.
-      Hover over points to see detailed information about each school.
+      School names are automatically positioned to avoid overlaps using D3-Labeler.
     </p>
-    ${subjectPlot}
+    ${plotWithLabels}
   </div>`;
 }
 
@@ -246,8 +244,12 @@ async function createSchoolLevelsPlot() {
       range: ["#059669", "#2563eb", "#7c3aed", "#dc2626"],
       legend: true
     },
+    r: {
+      type: "identity", // Use raw values directly without sqrt scaling
+      range: [3, 12] // Minimum and maximum radius in pixels
+    },
     marks: [
-      // Add trend line for each subject - no confidence band
+      // Add trend line for each subject - middle layer
       Plot.linearRegressionY(enrichedLevelsData, {
         x: "share_white", 
         y: "pct_meeting_exceeding",
@@ -258,34 +260,25 @@ async function createSchoolLevelsPlot() {
         ci: 0  // Remove confidence interval/uncertainty band
       }),
 
-      // Points for each school-subject with hover functionality
+      // Points for each school-subject with hover functionality - top layer
       Plot.dot(enrichedLevelsData, {
         x: "share_white",
         y: "pct_meeting_exceeding",
         fx: "subject_display",
-        r: d => 200 + d.n, // Same sizing as progress plot
+        r: d => 4 + d.n / 500,
         fill: "school_level",
-        fillOpacity: 0.8,
-        stroke: "school_level",
-        strokeWidth: 2,
+        fillOpacity: 1.0, // Full opacity for clear visibility
+        stroke: "black", // Small black stroke on the outside
+        strokeWidth: 1,
         title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nMeeting/Exceeding: ${d.pct_meeting_exceeding.toFixed(1)}%\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
       }),
 
-      // School name labels on hover - using text marks for better visibility
-      Plot.text(enrichedLevelsData, {
-        x: "share_white",
-        y: "pct_meeting_exceeding", 
-        fx: "subject_display",
-        text: "school",
-        fontSize: 9,
-        fill: "#333",
-        textAnchor: "middle",
-        dy: -8,
-        opacity: 0,
-        pointerEvents: "none"
-      }),
+
     ]
   });
+
+  // Apply auto-labeling to the plot
+  const plotWithLabels = addSchoolLabels(levelsPlot, enrichedLevelsData, "share_white", "pct_meeting_exceeding", "school");
 
   return html`<div class="card">
     <h3>Test Score Levels vs School Demographics by Subject</h3>
@@ -293,9 +286,9 @@ async function createSchoolLevelsPlot() {
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       Red trend lines show the correlation between demographics and achievement levels.
-      Hover over points to see detailed information about each school.
+      School names are automatically positioned to avoid overlaps using D3-Labeler.
     </p>
-    ${levelsPlot}
+    ${plotWithLabels}
   </div>`;
 }
 
@@ -304,6 +297,371 @@ display(await createSchoolLevelsPlot());
 
 ```js
 const db = FileAttachment("/data/cambridge.db").sqlite();
+```
+
+```js
+// D3-Labeler inline implementation
+function createSchoolLabeler() {
+  var lab = [],
+      anc = [],
+      w = 1, // box width
+      h = 1, // box width
+      labelerObj = {};
+
+  // Force simulation parameters (no longer needed - forces are now built-in)
+
+  // Greedy optimization functions
+  var greedyOptimizer = {
+    // Calculate objective function score for a label position
+    calculateScore: function(labelIndex, testX, testY) {
+      var score = 0;
+      var label = lab[labelIndex];
+      
+      // Store original position
+      var origX = label.x;
+      var origY = label.y;
+      
+      // Test position
+      label.x = testX;
+      label.y = testY;
+      
+      // 1. Line length penalty (minimize leader lines)
+      var dx = label.x - anc[labelIndex].x;
+      var dy = label.y - anc[labelIndex].y;
+      var lineLength = Math.sqrt(dx * dx + dy * dy);
+      score += lineLength * 10.0; // Higher weight for line length to pull labels closer
+      
+      // 2. Overlap penalties
+      score += this.calculateOverlapPenalty(labelIndex) * 500.0; // Much heavier penalty for overlaps
+      
+      // 3. Boundary penalty (keep inside constraints)
+      score += this.calculateBoundaryPenalty(labelIndex) * 10000.0; // Extremely heavy penalty for going outside
+      
+      // Restore original position
+      label.x = origX;
+      label.y = origY;
+      
+      return score;
+    },
+    
+    // Calculate overlap penalty for a label
+    calculateOverlapPenalty: function(labelIndex) {
+      var penalty = 0;
+      var label = lab[labelIndex];
+      
+      // Label bounding box
+      var x1 = label.x - label.width / 2;
+      var y1 = label.y - label.height + 0.2;
+      var x2 = label.x + label.width / 2;
+      var y2 = label.y + 0.2;
+      
+      // Check overlap with other labels
+      for (var i = 0; i < lab.length; i++) {
+        if (i === labelIndex) continue;
+        
+        var other = lab[i];
+        var ox1 = other.x - other.width / 2;
+        var oy1 = other.y - other.height + 0.2;
+        var ox2 = other.x + other.width / 2;
+        var oy2 = other.y + 0.2;
+        
+        var overlap_x = Math.max(0, Math.min(x2, ox2) - Math.max(x1, ox1));
+        var overlap_y = Math.max(0, Math.min(y2, oy2) - Math.max(y1, oy1));
+        
+        if (overlap_x > 0 && overlap_y > 0) {
+          penalty += overlap_x * overlap_y; // Area of overlap
+        }
+      }
+      
+      // Check distance from anchor points - enforce minimum clearance
+      for (var i = 0; i < anc.length; i++) {
+        var dx = label.x - anc[i].x;
+        var dy = label.y - anc[i].y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var minDist = anc[i].r + 1.2; // Safe clearance - ensure no overlap
+        
+        if (dist < minDist) {
+          var violation = minDist - dist;
+          penalty += violation * violation * 50; // Strong penalty for being too close to points
+        }
+      }
+      
+      return penalty;
+    },
+    
+    // Calculate boundary penalty for a label
+    calculateBoundaryPenalty: function(labelIndex) {
+      var penalty = 0;
+      var label = lab[labelIndex];
+      var margin = 1.0;
+      
+      var x1 = label.x - label.width / 2;
+      var y1 = label.y - label.height + 0.2;
+      var x2 = label.x + label.width / 2;
+      var y2 = label.y + 0.2;
+      
+      // Penalize going outside boundaries - much stronger penalties
+      if (x1 < margin) penalty += (margin - x1) * (margin - x1) * 100; // Quadratic penalty
+      if (x2 > w - margin) penalty += (x2 - (w - margin)) * (x2 - (w - margin)) * 100;
+      if (y1 < margin) penalty += (margin - y1) * (margin - y1) * 100;
+      if (y2 > h - margin) penalty += (y2 - (h - margin)) * (y2 - (h - margin)) * 100;
+      
+      return penalty;
+    },
+    
+    // Find best position for a label using grid search
+    optimizeLabel: function(labelIndex) {
+      var bestScore = Infinity;
+      var bestX = lab[labelIndex].x;
+      var bestY = lab[labelIndex].y;
+      
+      var anchor = anc[labelIndex];
+      var searchRadius = 8.0; // Much larger search area 
+      var stepSize = 0.2; // Finer grid resolution for better optimization
+      
+      // Grid search around the anchor point
+      for (var dx = -searchRadius; dx <= searchRadius; dx += stepSize) {
+        for (var dy = -searchRadius; dy <= searchRadius; dy += stepSize) {
+          var testX = anchor.x + dx;
+          var testY = anchor.y + dy;
+          
+          // Hard constraint: don't even consider positions outside boundaries
+          var margin = 1.0;
+          var testLabel = {
+            x: testX,
+            y: testY,
+            width: lab[labelIndex].width,
+            height: lab[labelIndex].height
+          };
+          var x1 = testLabel.x - testLabel.width / 2;
+          var x2 = testLabel.x + testLabel.width / 2;
+          var y1 = testLabel.y - testLabel.height + 0.2;
+          var y2 = testLabel.y + 0.2;
+          
+          // Skip positions that violate boundaries
+          if (x1 < margin || x2 > w - margin || y1 < margin || y2 > h - margin) {
+            continue;
+          }
+          
+          var score = this.calculateScore(labelIndex, testX, testY);
+          
+          if (score < bestScore) {
+            bestScore = score;
+            bestX = testX;
+            bestY = testY;
+          }
+        }
+      }
+      
+      // Update label position
+      lab[labelIndex].x = bestX;
+      lab[labelIndex].y = bestY;
+      
+      return bestScore;
+    },
+    
+    // Fine-tune position with smaller search radius for already well-placed labels
+    fineTuneLabel: function(labelIndex) {
+      var bestScore = this.calculateScore(labelIndex, lab[labelIndex].x, lab[labelIndex].y);
+      var bestX = lab[labelIndex].x;
+      var bestY = lab[labelIndex].y;
+      
+      var anchor = anc[labelIndex];
+      var searchRadius = 2.0; // Smaller search area for fine-tuning
+      var stepSize = 0.1; // Very fine grid resolution
+      
+      // Fine grid search around current position
+      for (var dx = -searchRadius; dx <= searchRadius; dx += stepSize) {
+        for (var dy = -searchRadius; dy <= searchRadius; dy += stepSize) {
+          var testX = lab[labelIndex].x + dx;
+          var testY = lab[labelIndex].y + dy;
+          
+          // Hard constraint: don't even consider positions outside boundaries
+          var margin = 1.0;
+          var testLabel = {
+            x: testX,
+            y: testY,
+            width: lab[labelIndex].width,
+            height: lab[labelIndex].height
+          };
+          var x1 = testLabel.x - testLabel.width / 2;
+          var x2 = testLabel.x + testLabel.width / 2;
+          var y1 = testLabel.y - testLabel.height + 0.2;
+          var y2 = testLabel.y + 0.2;
+          
+          // Skip positions that violate boundaries
+          if (x1 < margin || x2 > w - margin || y1 < margin || y2 > h - margin) {
+            continue;
+          }
+          
+          var score = this.calculateScore(labelIndex, testX, testY);
+          
+          if (score < bestScore) {
+            bestScore = score;
+            bestX = testX;
+            bestY = testY;
+          }
+        }
+      }
+      
+      // Update label position
+      lab[labelIndex].x = bestX;
+      lab[labelIndex].y = bestY;
+      
+      return bestScore;
+    }
+  };
+
+  // Greedy optimization step
+  var greedyStep = function() {
+    var improved = false;
+    
+    // Try to optimize each label in random order
+    var labelOrder = [];
+    for (var i = 0; i < lab.length; i++) {
+      labelOrder.push(i);
+    }
+    
+    // Shuffle the order to avoid systematic bias
+    for (var i = labelOrder.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var temp = labelOrder[i];
+      labelOrder[i] = labelOrder[j];
+      labelOrder[j] = temp;
+    }
+    
+          // Optimize each label
+      for (var i = 0; i < labelOrder.length; i++) {
+        var labelIndex = labelOrder[i];
+        var oldScore = greedyOptimizer.calculateScore(labelIndex, lab[labelIndex].x, lab[labelIndex].y);
+        var newScore = greedyOptimizer.optimizeLabel(labelIndex);
+        
+        if (newScore < oldScore) {
+          improved = true;
+          // Log significant improvements
+          if (oldScore - newScore > 10) {
+            console.log(`Label ${labelIndex} improved: ${oldScore.toFixed(1)} -> ${newScore.toFixed(1)}`);
+          }
+        }
+      }
+    
+    return improved;
+  };
+
+  // Utility functions removed - no longer needed for force-directed approach
+
+  labelerObj.start = function(iterations) {
+  // Greedy optimization
+      var m = lab.length;
+      if (m === 0) return;
+
+      console.log(`=== STARTING GREEDY OPTIMIZATION: ${iterations} iterations, ${m} labels ===`);
+      console.log(`Boundary constraints: width=${w.toFixed(2)}, height=${h.toFixed(2)}`);
+
+      // Initialize positions farther from anchors to encourage spreading
+      for (var i = 0; i < m; i++) {
+        var angle = Math.random() * 2 * Math.PI;
+        var minDist = anc[i].r + 1.5; // Safe clearance for initialization
+        var distance = minDist + 1.0 + Math.random() * 2.0; // Start well clear of anchor
+        lab[i].x = anc[i].x + Math.cos(angle) * distance;
+        lab[i].y = anc[i].y + Math.sin(angle) * distance;
+      }
+
+      var improvementCount = 0;
+      
+      // Run greedy optimization
+      for (var iter = 0; iter < iterations; iter++) {
+        var improved = greedyStep();
+        
+        if (improved) {
+          improvementCount++;
+        }
+        
+        // Early termination if no improvements for many iterations (be very patient)
+        if (iter > 30 && (iter - improvementCount) > 25) {
+          console.log(`Converged after ${iter + 1} iterations (${improvementCount} improvements)`);
+          break;
+        }
+      }
+      
+      // Calculate final stats
+      var totalOverlaps = 0;
+      var totalLineLength = 0;
+      for (var i = 0; i < m; i++) {
+        totalOverlaps += greedyOptimizer.calculateOverlapPenalty(i);
+        var dx = lab[i].x - anc[i].x;
+        var dy = lab[i].y - anc[i].y;
+        totalLineLength += Math.sqrt(dx * dx + dy * dy);
+      }
+      
+      console.log(`=== MAIN OPTIMIZATION COMPLETE: ${improvementCount} improvements ===`);
+      
+      // Fine-tuning phase - try to get labels closer to points
+      console.log(`Starting fine-tuning phase...`);
+      var fineTuningImprovements = 0;
+      for (var fineTuneIter = 0; fineTuneIter < 10; fineTuneIter++) {
+        var improved = false;
+        
+        // Fine-tune each label
+        for (var i = 0; i < m; i++) {
+          var oldScore = greedyOptimizer.calculateScore(i, lab[i].x, lab[i].y);
+          var newScore = greedyOptimizer.fineTuneLabel(i);
+          
+          if (newScore < oldScore) {
+            improved = true;
+            fineTuningImprovements++;
+            if (oldScore - newScore > 1) {
+              console.log(`Fine-tune label ${i}: ${oldScore.toFixed(1)} -> ${newScore.toFixed(1)}`);
+            }
+          }
+        }
+        
+        if (!improved) {
+          console.log(`Fine-tuning converged after ${fineTuneIter + 1} iterations`);
+          break;
+        }
+      }
+      
+      console.log(`=== GREEDY OPTIMIZATION COMPLETE: ${improvementCount} main + ${fineTuningImprovements} fine-tuning improvements ===`);
+      console.log(`Final: Avg line length: ${(totalLineLength / m).toFixed(1)}, Total overlap penalty: ${totalOverlaps.toFixed(1)}`);
+  };
+
+  labelerObj.width = function(x) {
+  // users insert graph width
+    if (!arguments.length) return w;
+    w = x;
+    return labelerObj;
+  };
+
+  labelerObj.height = function(x) {
+  // users insert graph height
+    if (!arguments.length) return h;
+    h = x;    
+    return labelerObj;
+  };
+
+  labelerObj.label = function(x) {
+  // users insert label positions
+    if (!arguments.length) return lab;
+    lab = x;
+    return labelerObj;
+  };
+
+  labelerObj.anchor = function(x) {
+  // users insert anchor positions
+    if (!arguments.length) return anc;
+    anc = x;
+    return labelerObj;
+  };
+
+  // Alternative energy and schedule functions removed - not needed for force-directed approach
+
+  return labelerObj;
+};
+```
+
+```js
+
 const schoolTypes = {
   "Amigos School": "Elementary and Middle",
   "Cambridge Rindge and Latin": "High",
@@ -323,6 +681,423 @@ const schoolTypes = {
   "Rindge Avenue Upper School": "Middle",
   "Vassal Lane Upper School": "Middle"
 };
+
+// Simplified auto-labeling function specifically for Cambridge schools plots
+function addSchoolLabels(plotElement, data, xField, yField, textField) {
+  // Add labels directly to the plot after it's rendered
+  const container = d3.select(plotElement);
+  
+  // Wait a bit for plot to render, then add labels
+  setTimeout(() => {
+    // Remove any existing labels to prevent duplicates
+    container.selectAll(".school-labels-facet-0, .school-labels-facet-1, .school-labels-facet-2").remove();
+    
+    // Observable Plot creates multiple SVG elements - we need the main plot SVG, not legends
+    const allSvgs = container.selectAll("svg");
+    
+    // Find the largest SVG (should be the main plot)
+    let svg = null;
+    let maxArea = 0;
+    
+    allSvgs.each(function() {
+      const svgEl = d3.select(this);
+      const width = parseFloat(svgEl.attr("width")) || 0;
+      const height = parseFloat(svgEl.attr("height")) || 0;
+      const area = width * height;
+      
+      if (area > maxArea) {
+        maxArea = area;
+        svg = svgEl;
+      }
+    });
+    
+    if (!svg || svg.empty()) {
+      return;
+    }
+    
+    // Observable Plot creates facets as separate groups (g elements)
+    // Find all groups that contain circles - these are the facet panels
+    const allGroupsWithCircles = svg.selectAll("g").filter(function() {
+      return d3.select(this).selectAll("circle").size() > 0;
+    });
+    
+    // Filter to get only the actual facet groups (should have around half the data points each)
+    // Skip the first group if it contains all points (likely a background/combined group)
+    const expectedPointsPerFacet = Math.floor(data.length / 2);
+    const facetGroups = allGroupsWithCircles.filter(function() {
+      const circleCount = d3.select(this).selectAll("circle").size();
+      // Look for groups with roughly half the total data points (actual facets)
+      // Avoid the group with all points (combined group)
+      return circleCount >= expectedPointsPerFacet && circleCount < data.length;
+    });
+    
+    if (facetGroups.empty()) {
+      return;
+    }
+    
+    // First pass: Calculate global Y bounds across ALL facets (since they share Y-axis)
+    let globalYCoords = [];
+    facetGroups.each(function() {
+      const facetCircles = d3.select(this).selectAll("circle");
+      facetCircles.each(function() {
+        const cy = parseFloat(d3.select(this).attr("cy"));
+        globalYCoords.push(cy);
+      });
+    });
+    
+    const globalMinY = Math.min(...globalYCoords);
+    const globalMaxY = Math.max(...globalYCoords);
+    const globalYHeight = globalMaxY - globalMinY + 50; // Add 50px margin
+    
+    // Process each facet group separately
+    facetGroups.each(function(d, facetIndex) {
+      const facetGroup = d3.select(this);
+      const facetCircles = facetGroup.selectAll("circle");
+      
+      if (facetCircles.empty()) return;
+      
+      // Check if this group already has labels to avoid duplicates
+      if (facetGroup.select(".school-labels-facet-0, .school-labels-facet-1").size() > 0) {
+        return;
+      }
+      
+      // Extract circle data for this facet using bounding boxes
+      const circleData = [];
+      facetCircles.each(function(d, i) {
+        const circle = d3.select(this);
+        const cx = parseFloat(circle.attr("cx"));
+        const cy = parseFloat(circle.attr("cy"));
+        
+        // Get actual bounding box for more accurate dimensions
+        const pointBBox = this.getBBox();
+        
+        circleData.push({ 
+          element: this, 
+          cx, 
+          cy, 
+          bbox: pointBBox,  // Store full bounding box
+          index: i, 
+          data: d 
+        });
+      });
+      
+      // Calculate facet bounds - use global Y bounds, local X bounds
+      const facetXCoords = circleData.map(d => d.cx);
+      const facetMinX = Math.min(...facetXCoords);
+      const facetMaxX = Math.max(...facetXCoords);
+      // Use global Y bounds for consistent height across facets
+      const facetMinY = globalMinY;
+      const facetMaxY = globalMaxY;
+      // Scale down facet dimensions to match scaled labels
+      const facetWidth = (facetMaxX - facetMinX + 50) / 10; // Scale down by 10x
+      const facetHeight = globalYHeight / 10; // Use global Y height, scaled down by 10x
+    
+      // Create arrays for the labeler for this facet
+      const labels = [];
+      const anchors = [];
+      
+      // Create a temporary text element to measure dimensions
+      const tempText = svg.append("text")
+        .style("font-size", "9px")
+        .style("font-family", "sans-serif")
+        .style("visibility", "hidden");
+      
+      // First pass: create anchors for ALL points in this facet using bounding boxes
+      circleData.forEach((circleInfo, localIndex) => {
+        const { cx, cy, bbox: pointBBox } = circleInfo;
+        // Add minimal padding to the point bounding box for better collision detection
+        const padding = 1;
+        const paddedBBox = {
+          x: pointBBox.x - padding,
+          y: pointBBox.y - padding,
+          width: pointBBox.width + 2 * padding,
+          height: pointBBox.height + 2 * padding
+        };
+        
+        anchors.push({
+          x: (cx - facetMinX + 25) / 10, // Translate to facet-relative coordinates, then scale down
+          y: (cy - facetMinY + 25) / 10, // Translate to facet-relative coordinates, then scale down
+          bbox: paddedBBox, // Store the padded bounding box (still in absolute coordinates for visual)
+          // Use a much smaller radius closer to actual visual circle size
+          r: 0.5 // Small radius in scaled coordinates (5px when scaled back up)
+        });
+      });
+      
+      // Second pass: create labels only for valid data points
+      circleData.forEach((circleInfo, localIndex) => {
+        const { cx, cy, bbox: pointBBox, data: dataIndex } = circleInfo;
+        
+        // The boundData is actually an index into our original data array
+        if (typeof dataIndex !== 'number' || dataIndex < 0 || dataIndex >= data.length) {
+          return;
+        }
+        
+        const dataPoint = data[dataIndex];
+        if (!dataPoint || !dataPoint[textField]) {
+          return;
+        }
+        
+        const schoolName = dataPoint[textField];
+        const schoolLevel = dataPoint.school_level; // Get school level for color mapping
+        
+        // Measure text width
+        tempText.text(schoolName);
+        const bbox = tempText.node().getBBox();
+        
+        // Start labels in any direction around their points
+        const minDistance = 25; // Minimum distance from point
+        const extraDistance = 15; // Additional random distance
+        const angle = Math.random() * 2 * Math.PI; // Full 360° around the point
+        const distance = minDistance + Math.random() * extraDistance;
+        
+        // SCALE DOWN label dimensions dramatically for D3-Labeler
+        const scaledWidth = (bbox.width * 0.85) / 10; // Scale down by 10x
+        const scaledHeight = (bbox.height * 1.1) / 10; // Scale down by 10x
+        
+        console.log(`Label "${schoolName}": original ${bbox.width.toFixed(1)}x${bbox.height.toFixed(1)} -> scaled ${scaledWidth.toFixed(1)}x${scaledHeight.toFixed(1)}`);
+
+        labels.push({
+          x: (cx - facetMinX + 25 + Math.cos(angle) * distance) / 10, // Translate to facet-relative, then scale down
+          y: (cy - facetMinY + 25 + Math.sin(angle) * distance) / 10, // Translate to facet-relative, then scale down
+          name: schoolName,
+          width: scaledWidth,
+          height: scaledHeight,
+          schoolLevel: schoolLevel // Store school level for color mapping
+        });
+      });
+      
+      tempText.remove();
+      
+      if (labels.length === 0) {
+        return;
+      }
+      
+      // OPTIMIZATION DEBUG: Log current parameter settings and results
+      console.log(`=== LABELER OPTIMIZATION DEBUG - Facet ${facetIndex} ===`);
+              console.log(`Parameters: w_len=0.01, w_inter=1.0, w_lab2=100.0, w_lab_anc=300.0, w_orient=2.0`);
+      console.log(`Inputs: ${labels.length} labels, ${anchors.length} anchors, dimensions: ${facetWidth}x${facetHeight}`);
+      
+      // Create color mapping function matching the plot's color scheme
+      const getSchoolLevelColor = (schoolLevel) => {
+        switch(schoolLevel) {
+          case "Elementary": return "#059669";
+          case "Elementary and Middle": return "#2563eb";  
+          case "Middle": return "#7c3aed";
+          case "High": return "#dc2626";
+          default: return "var(--theme-foreground)";
+        }
+      };
+
+      // Apply D3-Labeler optimization for this facet with enhanced settings
+      const labeler = createSchoolLabeler()
+        .label(labels)
+        .anchor(anchors) 
+        .width(facetWidth)
+        .height(facetHeight)
+                  .start(100); // Force-directed simulation iterations
+      
+      // Post-process labels to optimize distances
+      labels.forEach((label, i) => {
+        const anchor = anchors[i];
+        
+        // Ensure minimum distance from anchor point (considering circle radius)
+        const dx = label.x - anchor.x;
+        const dy = label.y - anchor.y;
+        const currentDist = Math.sqrt(dx * dx + dy * dy);
+        const minRequired = anchor.r + 0; // Circle radius + minimal clearance
+        
+        if (currentDist < minRequired) {
+          const angle = Math.atan2(dy, dx);
+          label.x = anchor.x + Math.cos(angle) * minRequired;
+          label.y = anchor.y + Math.sin(angle) * minRequired;
+        }
+      });
+      
+      // Additional optimization: try to pull labels closer when possible
+      labels.forEach((label, i) => {
+        const anchor = anchors[i];
+        const minRequired = anchor.r + 0;
+        
+        // Try to move closer to anchor along current direction
+        const dx = label.x - anchor.x;
+        const dy = label.y - anchor.y;
+        const currentDist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (currentDist > minRequired + 1) { // Only if we have room to move closer
+          const angle = Math.atan2(dy, dx);
+          const targetDist = minRequired + 1; // Try to get to just above minimum
+          const newX = anchor.x + Math.cos(angle) * targetDist;
+          const newY = anchor.y + Math.sin(angle) * targetDist;
+          
+          // Check for conflicts with other labels (simple distance check)
+          let hasConflict = false;
+          for (let j = 0; j < labels.length; j++) {
+            if (i === j) continue;
+            const otherLabel = labels[j];
+            const distToOther = Math.sqrt((newX - otherLabel.x) ** 2 + (newY - otherLabel.y) ** 2);
+            if (distToOther < 15) { // Minimum separation between labels
+              hasConflict = true;
+              break;
+            }
+          }
+          
+          if (!hasConflict) {
+            label.x = newX;
+            label.y = newY;
+          }
+        }
+      });
+      
+      // Calculate final energy and distances for optimization feedback
+      let totalEnergy = 0;
+      let avgLeaderLength = 0;
+      let labelOverlaps = 0;
+      let pointOverlaps = 0;
+      
+      for (let i = 0; i < labels.length; i++) {
+        // Leader line length
+        const dx = labels[i].x - anchors[i].x;
+        const dy = labels[i].y - anchors[i].y;
+        const leaderLength = Math.sqrt(dx * dx + dy * dy);
+        avgLeaderLength += leaderLength;
+        
+        // Check for label-label overlaps using actual bounding boxes
+        for (let j = i + 1; j < labels.length; j++) {
+          // Label i bounding box
+          const label1Left = labels[i].x;
+          const label1Right = labels[i].x + labels[i].width;
+          const label1Top = labels[i].y - labels[i].height * 0.7;
+          const label1Bottom = labels[i].y - labels[i].height * 0.7 + labels[i].height;
+          
+          // Label j bounding box
+          const label2Left = labels[j].x;
+          const label2Right = labels[j].x + labels[j].width;
+          const label2Top = labels[j].y - labels[j].height * 0.7;
+          const label2Bottom = labels[j].y - labels[j].height * 0.7 + labels[j].height;
+          
+          // Check if bounding boxes overlap
+          const xOverlap = label1Left < label2Right && label1Right > label2Left;
+          const yOverlap = label1Top < label2Bottom && label1Bottom > label2Top;
+          
+          if (xOverlap && yOverlap) labelOverlaps++;
+        }
+        
+        // Check for label-point overlaps using actual bounding boxes
+        for (let j = 0; j < anchors.length; j++) {
+          const labelLeft = labels[i].x;
+          const labelRight = labels[i].x + labels[i].width;
+          const labelTop = labels[i].y - labels[i].height * 0.7; // Match debug box positioning
+          const labelBottom = labels[i].y - labels[i].height * 0.7 + labels[i].height;
+          
+          // Use actual point bounding box
+          const pointBBox = anchors[j].bbox;
+          const pointLeft = pointBBox.x;
+          const pointRight = pointBBox.x + pointBBox.width;
+          const pointTop = pointBBox.y;
+          const pointBottom = pointBBox.y + pointBBox.height;
+          
+          // Check if label rectangle overlaps with point bounding box
+          const xOverlap = labelLeft < pointRight && labelRight > pointLeft;
+          const yOverlap = labelTop < pointBottom && labelBottom > pointTop;
+          
+          if (xOverlap && yOverlap) pointOverlaps++;
+        }
+      }
+      
+      avgLeaderLength = avgLeaderLength / labels.length;
+      
+      console.log(`Results: Avg leader length: ${avgLeaderLength.toFixed(1)}px, Label overlaps: ${labelOverlaps}, Point overlaps: ${pointOverlaps}`);
+      console.log(`=== END DEBUG ===`);
+      
+      // Add labels and leader lines to this facet group - insert at the beginning so they appear behind circles
+      const labelGroup = facetGroup.insert("g", ":first-child")
+        .attr("class", `school-labels-facet-${facetIndex}`);
+      
+      // DEBUG: Draw bounding boxes for points - HIDDEN
+      // const pointBoxes = labelGroup.selectAll(".point-bbox")
+      //   .data(anchors)
+      //   .enter()
+      //   .append("rect")
+      //   .attr("class", "point-bbox")
+      //   .attr("x", d => d.bbox.x) // Keep original scale - this was already correct
+      //   .attr("y", d => d.bbox.y) // Keep original scale - this was already correct
+      //   .attr("width", d => d.bbox.width) // Keep original scale - this was already correct
+      //   .attr("height", d => d.bbox.height) // Keep original scale - this was already correct
+      //   .attr("fill", "none")
+      //   .attr("stroke", "red")
+      //   .attr("stroke-width", 1)
+      //   .attr("stroke-dasharray", "2,2")
+      //   .attr("opacity", 0.7);
+      
+            // Add leader lines with matching school level colors (scale positions back up)
+      const leaderLines = labelGroup.selectAll(".leader-line")
+        .data(labels)
+        .enter()
+        .append("line")
+        .attr("class", "leader-line")
+        .attr("x1", (d, i) => (anchors[i].x * 10) + facetMinX - 25) // Scale back up and translate to absolute coordinates
+        .attr("y1", (d, i) => (anchors[i].y * 10) + facetMinY - 25) // Scale back up and translate to absolute coordinates
+        .attr("x2", d => (d.x * 10) + facetMinX - 25) // Scale back up and translate to absolute coordinates
+        .attr("y2", d => (d.y * 10) + facetMinY - 25) // Scale back up and translate to absolute coordinates
+        .attr("stroke", d => getSchoolLevelColor(d.schoolLevel))
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "3,3")
+        .attr("opacity", 0.7);
+      
+      // Add positioned labels with exact Observable Plot text styling and matching colors (scale positions back up)
+      const labelTexts = labelGroup.selectAll(".school-label")
+        .data(labels)
+        .enter()
+        .append("text")
+        .attr("class", "school-label")
+        .attr("x", d => (d.x * 10) + facetMinX - 25) // Scale back up and translate to absolute coordinates
+        .attr("y", d => (d.y * 10) + facetMinY - 25) // Scale back up and translate to absolute coordinates
+        .text(d => d.name)
+        .style("font", "7px var(--sans-serif)")
+        .style("fill", d => getSchoolLevelColor(d.schoolLevel)) // Use school level color
+        .style("text-anchor", "middle")
+        .style("white-space", "pre")
+        .style("stroke", "var(--plot-background, white)")
+        .style("stroke-width", "3px")
+        .style("paint-order", "stroke")
+        .style("opacity", "1.0");
+      
+      // DEBUG: Draw plot boundary rectangle - HIDDEN
+      // labelGroup.append("rect")
+      //   .attr("class", "plot-boundary")
+      //   .attr("x", facetMinX - 25) // Position at actual facet origin (with margin)
+      //   .attr("y", facetMinY - 25) // Position at actual facet origin (with margin)
+      //   .attr("width", facetWidth * 10) // Scale back up to visual coordinates
+      //   .attr("height", facetHeight * 10) // Scale back up to visual coordinates
+      //   .attr("fill", "none")
+      //   .attr("stroke", "red")
+      //   .attr("stroke-width", 2)
+      //   .attr("stroke-dasharray", "5,5")
+      //   .attr("opacity", 0.8);
+
+      // DEBUG: Draw bounding boxes for labels - HIDDEN
+      // const labelBoxes = labelGroup.selectAll(".label-bbox")
+      //   .data(labels)
+      //   .enter()
+      //   .append("rect")
+      //   .attr("class", "label-bbox")
+      //   .attr("x", d => (d.x * 10) + facetMinX - 25 - (d.width * 10) / 2) // Center-justified: subtract half width, translate to absolute coordinates
+      //   .attr("y", d => (d.y * 10) + facetMinY - 25 - (d.height * 10) * 0.7) // Scale back up and adjust positioning, translate to absolute coordinates
+      //   .attr("width", d => d.width * 10) // Scale back up to match actual label size
+      //   .attr("height", d => d.height * 10) // Scale back up to match actual label size
+      //   .attr("fill", "none")
+      //   .attr("stroke", "blue")
+      //   .attr("stroke-width", 1)
+      //   .attr("stroke-dasharray", "3,3")
+      //   .attr("opacity", 0.8);
+      
+
+    }); // End facet group processing
+    
+  }, 150);
+  
+  return plotElement;
+}
 ```
 
 ```js
