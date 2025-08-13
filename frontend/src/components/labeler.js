@@ -25,27 +25,29 @@ function createSchoolLabeler() {
       h = 1, // box height
       labelerObj = {};
 
-  // ggrepel-style physics simulation parameters (optimized for SHORT leader lines with acceptable overlaps)
+  // ggrepel-style physics simulation parameters (adjusted for better convergence)
   var physics = {
-    force_push: 1e-6,     // Repulsion force magnitude (reduced to allow closer positioning)
-    force_pull: 2e-6,     // Spring force magnitude (much stronger than repulsion!)
-    max_time: 0.5,        // Maximum simulation time in seconds (more time for convergence)
-    max_iter: 8000,       // Maximum iterations (doubled for better convergence)
-    velocity_decay: 0.8,  // Velocity damping factor (slightly higher for more gradual convergence)
-    temperature: 10.0,    // Simulated annealing temperature
-    cooling_rate: 0.99998, // Temperature cooling rate (even slower cooling to maintain forces longer)
-    force_point_size: 250.0, // Multiplier for point repulsion forces (much stronger based on diagnostics)
-    min_improvement_threshold: 0.01, // Minimum improvement to continue
-    fixed_anchor_pull: 5e-7, // Fixed coefficient for distance-squared attraction force to anchor
+    force_push: 1e-6,     // Stronger initial repulsion force for better convergence
+    force_pull: 1e-6,     // Stronger initial spring force for better convergence
+    max_time: 0.2,        // Longer maximum simulation time
+    max_iter: 3000,       // More iterations allowed
+    max_overlaps: 10,     // Maximum overlaps before disabling label (matches C++)
+    velocity_decay: 0.8,  // Slightly higher velocity decay for more stability
+    force_point_size: 100.0, // Multiplier for point repulsion forces (matches C++)
+    force_push_decay: 0.9999, // Faster force decay to prevent oscillation
+    force_pull_decay: 0.999,  // Faster spring force decay
     
     // Use global seeded random for consistency
     seededRandom: function() {
       return globalSeededRandom.random();
     },
     
-    // Initialize physics state
+    // Initialize physics state (C++ style)
     velocities: [],
     original_positions: [],
+    total_overlaps: [],
+    too_many_overlaps: [],
+    text_box_widths: [],
     
     // Euclidean distance between two points
     euclid: function(a, b) {
@@ -76,74 +78,66 @@ function createSchoolLabeler() {
       return distance < (circle.r + 0.2);
     },
     
-    // Calculate repulsion force between two points
+    // Calculate repulsion force between two points (C++ implementation)
     repelForce: function(a, b, force_magnitude) {
-      var dx = a.x - b.x;
-      var dy = a.y - b.y;
-      var d2 = Math.max(dx * dx + dy * dy, 0.0004); // Minimum distance constraint
-      var d = Math.sqrt(d2);
+      var dx = Math.abs(a.x - b.x);
+      var dy = Math.abs(a.y - b.y);
+      // Constrain the minimum distance, so it is never 0 (matches C++)
+      var d2 = Math.max(dx * dx + dy * dy, 0.0004);
       
-      // Unit vector in direction of force
-      var ux = dx / d;
-      var uy = dy / d;
+      // Compute a unit vector in the direction of the force
+      var v = {
+        x: (a.x - b.x) / Math.sqrt(d2),
+        y: (a.y - b.y) / Math.sqrt(d2)
+      };
       
-      // Force magnitude inversely proportional to squared distance
-      var force = force_magnitude / d2;
+      // Divide the force by the squared distance
+      var f = {
+        x: force_magnitude * v.x / d2,
+        y: force_magnitude * v.y / d2
+      };
+      
+      // Enhance force in dominant direction (matches C++)
+      if (dx > dy) {
+        f.y = f.y * 2;
+      } else {
+        f.x = f.x * 2;
+      }
+      
+      return f;
+    },
+    
+    // Calculate spring force pulling toward target position (C++ implementation)
+    springForce: function(target, current, force_magnitude) {
+      var v = {
+        x: target.x - current.x,
+        y: target.y - current.y
+      };
       
       return {
-        x: ux * force,
-        y: uy * force
+        x: force_magnitude * v.x,
+        y: force_magnitude * v.y
       };
     },
     
-    // Calculate spring force pulling toward original position
-    springForce: function(current, original, force_magnitude) {
-      var dx = original.x - current.x;
-      var dy = original.y - current.y;
+    // Keep box within boundaries (C++ implementation)
+    putWithinBounds: function(box, xbounds, ybounds) {
+      var width = Math.abs(box.x1 - box.x2);
+      var height = Math.abs(box.y1 - box.y2);
       
-      return {
-        x: dx * force_magnitude,
-        y: dy * force_magnitude
-      };
-    },
-    
-    // Calculate distance-squared spring force (stronger pull for distant labels)
-    distanceSquaredSpringForce: function(current, target, force_magnitude) {
-      var dx = target.x - current.x;
-      var dy = target.y - current.y;
-      var distance = Math.sqrt(dx * dx + dy * dy);
-      
-      if (distance < 0.1) return { x: 0, y: 0 }; // Avoid division by zero
-      
-      // Force increases with square of distance
-      var distance_squared_multiplier = distance * distance;
-      var unit_x = dx / distance;
-      var unit_y = dy / distance;
-      
-      return {
-        x: unit_x * force_magnitude * distance_squared_multiplier,
-        y: unit_y * force_magnitude * distance_squared_multiplier
-      };
-    },
-    
-    // Keep box within boundaries
-    putWithinBounds: function(box, bounds) {
-      var width = box.x2 - box.x1;
-      var height = box.y2 - box.y1;
-      
-      if (box.x1 < bounds.x1) {
-        box.x1 = bounds.x1;
+      if (box.x1 < xbounds.x) {
+        box.x1 = xbounds.x;
         box.x2 = box.x1 + width;
-      } else if (box.x2 > bounds.x2) {
-        box.x2 = bounds.x2;
+      } else if (box.x2 > xbounds.y) {
+        box.x2 = xbounds.y;
         box.x1 = box.x2 - width;
       }
       
-      if (box.y1 < bounds.y1) {
-        box.y1 = bounds.y1;
+      if (box.y1 < ybounds.x) {
+        box.y1 = ybounds.x;
         box.y2 = box.y1 + height;
-      } else if (box.y2 > bounds.y2) {
-        box.y2 = bounds.y2;
+      } else if (box.y2 > ybounds.y) {
+        box.y2 = ybounds.y;
         box.y1 = box.y2 - height;
       }
       
@@ -177,304 +171,304 @@ function createSchoolLabeler() {
       };
     },
     
-    // Main physics simulation step
+    // Line intersection detection (from C++ implementation)
+    lineIntersect: function(p1, q1, p2, q2) {
+      // Special cases - degenerate lines
+      if ((q1.x === q2.x && q1.y === q2.y) || 
+          (p1.x === q1.x && p1.y === q1.y) || 
+          (p2.x === q2.x && p2.y === q2.y)) {
+        return false;
+      }
+
+      var dy1 = q1.y - p1.y;
+      var dx1 = q1.x - p1.x;
+      var slope1 = dy1 / dx1;
+      var intercept1 = q1.y - q1.x * slope1;
+
+      var dy2 = q2.y - p2.y;
+      var dx2 = q2.x - p2.x;
+      var slope2 = dy2 / dx2;
+      var intercept2 = q2.y - q2.x * slope2;
+
+      var x, y;
+
+      // Check if lines are vertical
+      var epsilon = 1e-10;
+      if (Math.abs(dx1) < epsilon) {
+        if (Math.abs(dx2) < epsilon) {
+          return false; // Both vertical, parallel
+        } else {
+          x = p1.x;
+          y = slope2 * x + intercept2;
+        }
+      } else if (Math.abs(dx2) < epsilon) {
+        x = p2.x;
+        y = slope1 * x + intercept1;
+      } else {
+        if (Math.abs(slope1 - slope2) < epsilon) {
+          return false; // Parallel lines
+        }
+        x = (intercept2 - intercept1) / (slope1 - slope2);
+        y = slope1 * x + intercept1;
+      }
+
+      // Check if intersection point is within both line segments
+      return (x >= Math.min(p1.x, q1.x) && x <= Math.max(p1.x, q1.x) &&
+              y >= Math.min(p1.y, q1.y) && y <= Math.max(p1.y, q1.y) &&
+              x >= Math.min(p2.x, q2.x) && x <= Math.max(p2.x, q2.x) &&
+              y >= Math.min(p2.y, q2.y) && y <= Math.max(p2.y, q2.y));
+    },
+    
+    // Rescale array to [0,1] range (from C++ implementation)
+    rescale: function(v) {
+      if (v.length === 0) return v;
+      var min_value = Math.min.apply(Math, v);
+      var max_value = Math.max.apply(Math, v);
+      if (max_value === min_value) return v.map(function() { return 0; });
+      
+      return v.map(function(val) {
+        return (val - min_value) / (max_value - min_value);
+      });
+    },
+    
+    // Main physics simulation step (C++ repel_boxes2 implementation)
     simulationStep: function(iter) {
       var n_overlaps = 0;
-      var bounds = { x1: 1, y1: 1, x2: w - 1, y2: h - 1 };
+      var bounds = { x: 1, y: w - 1 }; // x bounds
+      var ybounds = { x: 1, y: h - 1 }; // y bounds
       
-      // Process each label
+      // Force decay per iteration (matches C++)
+      this.force_push *= this.force_push_decay;
+      this.force_pull *= this.force_pull_decay;
+      
+      // Process each label (text box)
       for (var i = 0; i < lab.length; i++) {
-        var label = lab[i];
-        var labelBox = this.labelToBox(label);
-        var labelCenter = this.centroid(labelBox);
-        
+        // Skip labels with too many overlaps (matches C++)
+        if (iter >= 2 && this.total_overlaps[i] > this.max_overlaps) {
+          this.too_many_overlaps[i] = true;
+        }
+        if (this.too_many_overlaps[i]) {
+          continue;
+        }
+
+        // Reset overlaps for next iteration
+        this.total_overlaps[i] = 0;
+        var i_overlaps = false;
         var force = { x: 0, y: 0 };
-        var hasOverlap = false;
-        var overlap_count = 0; // Count overlaps for this specific label
         
-        // Repulsion from other labels (with MASSIVE overlap penalties)
-        for (var j = 0; j < lab.length; j++) {
-          if (i === j) continue;
-          
-          var otherBox = this.labelToBox(lab[j]);
-          if (this.boxesOverlap(labelBox, otherBox)) {
-            n_overlaps++;
-            hasOverlap = true;
-            overlap_count++;
-            
-            var otherCenter = this.centroid(otherBox);
-            
-            // Calculate overlap area for proportional force
-            var overlap_x = Math.max(0, Math.min(labelBox.x2, otherBox.x2) - Math.max(labelBox.x1, otherBox.x1));
-            var overlap_y = Math.max(0, Math.min(labelBox.y2, otherBox.y2) - Math.max(labelBox.y1, otherBox.y1));
-            var overlap_area = overlap_x * overlap_y;
-            
-            // MODERATE force multiplier - prioritize shorter leader lines over perfect overlap avoidance
-            var base_multiplier = 10.0; // Base penalty for any overlap (reduced to allow some overlap for shorter lines)
-            var area_multiplier = overlap_area * 20.0; // Penalty proportional to overlap area (reduced significantly)
-            var count_multiplier = Math.pow(overlap_count, 2) * 2.0; // Exponential penalty for multiple overlaps (reduced)
-            var time_multiplier = 1.0 + Math.min(iter / 500, 3.0); // Increasing penalty over time (reduced and slower)
-            
-            var total_multiplier = base_multiplier + area_multiplier + count_multiplier;
-            total_multiplier *= time_multiplier;
-            
-            var adaptiveForce = this.force_push * total_multiplier;
-            var repel = this.repelForce(labelCenter, otherCenter, adaptiveForce);
-            force.x += repel.x;
-            force.y += repel.y;
-          }
-        }
+        var labelBox = this.labelToBox(lab[i]);
+        var ci = this.centroid(labelBox); // Current label center
         
-        // Repulsion from OTHER anchor points (not the label's own point) - only when overlapping
+        // Check overlaps with data points and other labels
         for (var j = 0; j < anc.length; j++) {
-          if (j === i) continue; // Skip the label's own anchor point - it only attracts, never repels
-          
           var anchorCircle = this.anchorToCircle(anc[j]);
-          if (this.circleBoxOverlap(anchorCircle, labelBox)) {
-            n_overlaps++;
-            hasOverlap = true;
-            overlap_count++;
-            
-            // Calculate penetration depth into circle
-            var dx = labelCenter.x - anchorCircle.x;
-            var dy = labelCenter.y - anchorCircle.y;
-            var distance = Math.sqrt(dx * dx + dy * dy);
-            var penetration = Math.max(0, anchorCircle.r + 0.2 - distance);
-            
-            // MODERATE penalty for overlapping with OTHER points
-            var base_point_multiplier = 40.0; // Moderate base penalty for other points
-            var penetration_multiplier = penetration * 100.0; // Moderate penalty for deep penetration
-            var point_time_multiplier = 1.0 + Math.min(iter / 200, 5.0); // Slower escalation for points
-            
-            var total_point_multiplier = (base_point_multiplier + penetration_multiplier) * point_time_multiplier;
-            
-            var adaptiveForce = this.force_push * total_point_multiplier;
-            var repel = this.repelForce(labelCenter, anchorCircle, adaptiveForce);
-            force.x += repel.x;
-            force.y += repel.y;
-          }
-        }
-        
-        // ALWAYS apply attractive force from the label's own anchor point (but with minimum distance constraint)
-        if (i < anc.length) {
-          var anchor_pos = { x: anc[i].x, y: anc[i].y };
-          var anchor_circle = this.anchorToCircle(anc[i]);
+          var point = { x: anc[j].x, y: anc[j].y };
           
-          // Check if label is too close to its own anchor point
-          var dist_to_anchor = this.euclid(labelCenter, anchor_pos);
-          var label_size = Math.max(lab[i].width, lab[i].height);
-          var min_safe_distance = anchor_circle.r + label_size / 2 + 0.2; // Circle + label size + buffer
-          
-          if (dist_to_anchor < min_safe_distance) {
-            // Apply strong repulsion from own anchor if too close
-            var repel_from_anchor = this.repelForce(labelCenter, anchor_pos, this.force_push * 50.0);
-            force.x += repel_from_anchor.x;
-            force.y += repel_from_anchor.y;
+          if (i === j) {
+            // Own data point - skip if no size/padding
+            if (anc[i].r === 0) continue;
+            
+            // Repel from own data point if overlapping
+            if (this.circleBoxOverlap(anchorCircle, labelBox)) {
+              n_overlaps += 1;
+              i_overlaps = true;
+              this.total_overlaps[i] += 1;
+              var repelForce = this.repelForce(ci, point, anc[i].r * this.force_point_size * this.force_push);
+              force.x += repelForce.x;
+              force.y += repelForce.y;
+            }
+          } else if (j < lab.length && this.too_many_overlaps[j]) {
+            // Other data point with disabled label - skip if no size
+            if (anc[j].r === 0) continue;
+            
+            // Repel from other data points  
+            if (this.circleBoxOverlap(anchorCircle, labelBox)) {
+              n_overlaps += 1;
+              i_overlaps = true;
+              this.total_overlaps[i] += 1;
+              var repelForce = this.repelForce(ci, point, anc[j].r * this.force_point_size * this.force_push);
+              force.x += repelForce.x;
+              force.y += repelForce.y;
+            }
           } else {
-            // Fixed coefficient with distance-squared attraction to anchor
-            var dx = anchor_pos.x - labelCenter.x;
-            var dy = anchor_pos.y - labelCenter.y;
-            var distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 0) {
-              // Force increases with square of distance - stronger pull when farther away
-              var distance_squared = distance * distance;
-              var force_magnitude = this.fixed_anchor_pull * distance_squared;
-              var unit_x = dx / distance;
-              var unit_y = dy / distance;
+            // Check label-label overlaps
+            if (j < lab.length) {
+              var otherBox = this.labelToBox(lab[j]);
+              var cj = this.centroid(otherBox);
               
-              force.x += unit_x * force_magnitude;
-              force.y += unit_y * force_magnitude;
+              if (this.boxesOverlap(labelBox, otherBox)) {
+                n_overlaps += 1;
+                i_overlaps = true;
+                this.total_overlaps[i] += 1;
+                var repelForce = this.repelForce(ci, cj, this.force_push);
+                force.x += repelForce.x;
+                force.y += repelForce.y;
+              }
+            }
+            
+            // Repel from other data points
+            if (anc[j].r > 0 && this.circleBoxOverlap(anchorCircle, labelBox)) {
+              n_overlaps += 1;
+              i_overlaps = true;
+              this.total_overlaps[i] += 1;
+              var repelForce = this.repelForce(ci, point, anc[j].r * this.force_point_size * this.force_push);
+              force.x += repelForce.x;
+              force.y += repelForce.y;
             }
           }
         }
         
-        // Update velocity with damping (reduced damping for overlapping labels)
-        var effective_decay = hasOverlap ? this.velocity_decay * 0.9 : this.velocity_decay; // Less damping for overlapping labels
-        this.velocities[i].x = this.velocities[i].x * effective_decay + force.x;
-        this.velocities[i].y = this.velocities[i].y * effective_decay + force.y;
-        
-        // Velocity boost for overlapping labels (they MUST move faster)
-        if (hasOverlap && overlap_count > 0) {
-          var velocity_boost = 1.0 + (overlap_count * 0.5); // 50% boost per overlap
-          this.velocities[i].x *= velocity_boost;
-          this.velocities[i].y *= velocity_boost;
+        // Pull toward original position if no overlaps (matches C++)
+        if (!i_overlaps && i < this.original_positions.length) {
+          var springForce = this.springForce(this.original_positions[i], ci, this.force_pull);
+          force.x += springForce.x;
+          force.y += springForce.y;
         }
         
-        // CRITICAL: Velocity clamping to prevent numerical explosion
-        var max_velocity = 2.0; // Maximum allowed velocity per iteration
-        var velocity_magnitude = Math.sqrt(this.velocities[i].x * this.velocities[i].x + this.velocities[i].y * this.velocities[i].y);
-        if (velocity_magnitude > max_velocity) {
-          var scale = max_velocity / velocity_magnitude;
-          this.velocities[i].x *= scale;
-          this.velocities[i].y *= scale;
+        // Calculate overlap multiplier (matches C++)
+        var overlap_multiplier = 1.0;
+        if (this.total_overlaps[i] > 10) {
+          overlap_multiplier += 0.5;
+        } else {
+          overlap_multiplier += 0.05 * this.total_overlaps[i];
         }
         
-        // Add small random perturbation to break oscillations in late iterations
-        if (iter > 2000 && iter % 100 === 0) {
-          var perturbation = hasOverlap ? 0.1 : 0.05; // Larger perturbation for overlapping labels
-          this.velocities[i].x += (this.seededRandom() - 0.5) * perturbation;
-          this.velocities[i].y += (this.seededRandom() - 0.5) * perturbation;
-        }
+        // Update velocity with width scaling (matches C++)
+        var width_factor = this.text_box_widths[i] + 1e-6;
+        this.velocities[i].x = overlap_multiplier * this.velocities[i].x * width_factor * this.velocity_decay + force.x;
+        this.velocities[i].y = overlap_multiplier * this.velocities[i].y * width_factor * this.velocity_decay + force.y;
         
         // Update position
-        label.x += this.velocities[i].x;
-        label.y += this.velocities[i].y;
+        lab[i].x += this.velocities[i].x;
+        lab[i].y += this.velocities[i].y;
         
-        // Keep within bounds
-        var newBox = this.labelToBox(label);
-        newBox = this.putWithinBounds(newBox, bounds);
-        label.x = (newBox.x1 + newBox.x2) / 2;
-        label.y = newBox.y2 - 0.2;
+        // Keep within bounds (matches C++)
+        var newBox = this.labelToBox(lab[i]);
+        newBox = this.putWithinBounds(newBox, bounds, ybounds);
+        lab[i].x = (newBox.x1 + newBox.x2) / 2;
+        lab[i].y = newBox.y2 - 0.2;
+        
+        // Check for line intersections (matches C++)
+        if (n_overlaps === 0 || iter % 5 === 0) {
+          for (var j = 0; j < lab.length; j++) {
+            if (i === j || j >= anc.length) continue;
+            
+            var cj = this.centroid(this.labelToBox(lab[j]));
+            var ci_updated = this.centroid(this.labelToBox(lab[i]));
+            var point_i = { x: anc[i].x, y: anc[i].y };
+            var point_j = { x: anc[j].x, y: anc[j].y };
+            
+            // Check if leader lines intersect
+            if (this.lineIntersect(ci_updated, point_i, cj, point_j)) {
+              n_overlaps += 1;
+              // Apply spring forces to separate
+              var springForceI = this.springForce(cj, ci_updated, 1);
+              var springForceJ = this.springForce(ci_updated, cj, 1);
+              
+              lab[i].x += springForceI.x;
+              lab[i].y += springForceI.y;
+              lab[j].x += springForceJ.x;
+              lab[j].y += springForceJ.y;
+              
+              // Check if resolved, if not apply stronger force
+              ci_updated = this.centroid(this.labelToBox(lab[i]));
+              cj = this.centroid(this.labelToBox(lab[j]));
+              if (this.lineIntersect(ci_updated, point_i, cj, point_j)) {
+                var strongForceI = this.springForce(cj, ci_updated, 1.25);
+                var strongForceJ = this.springForce(ci_updated, cj, 1.25);
+                lab[i].x += strongForceI.x;
+                lab[i].y += strongForceI.y;
+                lab[j].x += strongForceJ.x;
+                lab[j].y += strongForceJ.y;
+              }
+            }
+          }
+        }
       }
-      
-      // Keep forces constant - no decay for consistent optimization
-      this.temperature *= this.cooling_rate;
       
       return n_overlaps;
     },
     
-    // Initialize physics simulation
+    // Initialize physics simulation (C++ style)
     initializeSimulation: function() {
       this.velocities = [];
       this.original_positions = [];
+      this.total_overlaps = [];
+      this.too_many_overlaps = [];
+      this.text_box_widths = [];
       
       // Reset random seed for consistent results
       globalSeededRandom.reset();
       
+      // Initialize arrays for each label
       for (var i = 0; i < lab.length; i++) {
         this.velocities.push({ x: 0, y: 0 });
         this.original_positions.push({ x: lab[i].x, y: lab[i].y });
+        this.total_overlaps.push(0);
+        this.too_many_overlaps.push(false);
+        this.text_box_widths.push(lab[i].width || 1.0);
+      }
+      
+      // Calculate text box widths and rescale (matches C++)
+      this.text_box_widths = this.rescale(this.text_box_widths);
+      
+      // Add initial jitter (matches C++)
+      for (var i = 0; i < lab.length; i++) {
+        var jitter = this.force_push;
+        lab[i].x += (this.seededRandom() - 0.5) * jitter;
+        lab[i].y += (this.seededRandom() - 0.5) * jitter;
       }
       
       // Reset force parameters to initial values
       this.force_push = 1e-6;
-      this.force_pull = 2e-6;
-      this.temperature = 10.0;
+      this.force_pull = 1e-6;
     },
     
-    // Run complete simulation with detailed diagnostics
+    // Run complete simulation (C++ repel_boxes2 style)
     runSimulation: function() {
-      console.log(`=== STARTING GGREPEL-STYLE PHYSICS SIMULATION ===`);
-      console.log(`Parameters: force_push=${this.force_push}, force_pull=${this.force_pull}, max_iter=${this.max_iter}`);
+      console.log(`=== STARTING C++ STYLE PHYSICS SIMULATION ===`);
+      console.log(`Parameters: force_push=${this.force_push}, force_pull=${this.force_pull}, max_iter=${this.max_iter}, max_time=${this.max_time}s`);
       console.log(`Simulation area: ${w.toFixed(1)} x ${h.toFixed(1)}, Label density: ${(lab.length / (w * h)).toFixed(3)} labels/unit²`);
       
       this.initializeSimulation();
       
       var start_time = Date.now();
-      var max_time_ms = this.max_time * 1000;
+      var max_time_ms = this.max_time * 1000; // Convert to milliseconds
       var iter = 0;
       var n_overlaps = 1;
-      var prev_overlaps = Infinity;
-      var stagnant_iterations = 0;
-      var max_stagnant = 800; // Doubled to allow more time for fine-tuning
-      var best_overlaps = Infinity;
-      var total_velocity = 0;
-      var force_history = [];
-      var overlap_history = []; // Track overlap oscillations
+      var p_overlaps = 1;
       
-      // Initial diagnostics
-      var initial_overlaps = this.simulationStep(0);
-      console.log(`Initial state: ${initial_overlaps} overlaps detected`);
-      
-      while (n_overlaps > 0 && iter < this.max_iter) {
-        iter++;
+      while (n_overlaps && iter < this.max_iter) {
+        iter += 1;
+        p_overlaps = n_overlaps;
         n_overlaps = this.simulationStep(iter);
         
-        // Calculate total system velocity for convergence analysis
-        total_velocity = 0;
-        for (var i = 0; i < this.velocities.length; i++) {
-          total_velocity += Math.sqrt(this.velocities[i].x * this.velocities[i].x + this.velocities[i].y * this.velocities[i].y);
-        }
-        
-        // Track best result
-        if (n_overlaps < best_overlaps) {
-          best_overlaps = n_overlaps;
-        }
-        
-        // Track overlap history for oscillation detection
-        overlap_history.push(n_overlaps);
-        if (overlap_history.length > 50) overlap_history.shift(); // Keep last 50 values
-        
-        // Detect oscillation patterns
-        var is_oscillating = false;
-        if (overlap_history.length >= 20) {
-          var recent_range = Math.max(...overlap_history.slice(-20)) - Math.min(...overlap_history.slice(-20));
-          var recent_avg = overlap_history.slice(-20).reduce((a,b) => a+b) / 20;
-          is_oscillating = recent_range > 5 && Math.abs(n_overlaps - recent_avg) < recent_range * 0.3;
-        }
-        
-        // Enhanced stagnation detection
-        if ((n_overlaps >= prev_overlaps && total_velocity < 0.001) || is_oscillating) {
-          stagnant_iterations++;
-        } else {
-          stagnant_iterations = 0;
-        }
-        prev_overlaps = n_overlaps;
-        
-        // Store force history for analysis
-        if (iter % 100 === 0) {
-          force_history.push({
-            iter: iter,
-            overlaps: n_overlaps,
-            velocity: total_velocity,
-            force_push: this.force_push,
-            force_pull: this.force_pull
-          });
-        }
-        
-        // Enhanced progress logging with overlap penalties
-        if (iter % 200 === 0) {
-          // Calculate average force multiplier being applied
-          var total_force_multiplier = 0;
-          var overlapping_labels = 0;
-          for (var i = 0; i < lab.length; i++) {
-            var labelBox = this.labelToBox(lab[i]);
-            var label_overlaps = 0;
-            for (var j = 0; j < lab.length; j++) {
-              if (i !== j && this.boxesOverlap(labelBox, this.labelToBox(lab[j]))) label_overlaps++;
-            }
-            for (var j = 0; j < anc.length; j++) {
-              if (this.circleBoxOverlap(this.anchorToCircle(anc[j]), labelBox)) label_overlaps++;
-            }
-            if (label_overlaps > 0) {
-              overlapping_labels++;
-              var multiplier = 50.0 + Math.pow(label_overlaps, 2) * 10.0;
-              total_force_multiplier += multiplier;
-            }
-          }
-          var avg_multiplier = overlapping_labels > 0 ? (total_force_multiplier / overlapping_labels) : 1.0;
-          
-          console.log(`Iter ${iter}: ${n_overlaps} overlaps, velocity=${total_velocity.toFixed(4)}, forces=${this.force_push.toExponential(1)}/${this.force_pull.toExponential(1)}, avg_penalty=${avg_multiplier.toFixed(1)}x`);
-        }
-        
-        // Early termination with enhanced diagnostics
-        if (stagnant_iterations > max_stagnant) {
-          console.log(`Early termination: no progress for ${max_stagnant} iterations`);
-          console.log(`Stagnation analysis: velocity=${total_velocity.toFixed(4)}, best_overlaps=${best_overlaps}, oscillating=${is_oscillating}`);
-          if (overlap_history.length >= 10) {
-            var recent_overlaps = overlap_history.slice(-10).join(',');
-            console.log(`Recent overlap pattern: [${recent_overlaps}]`);
-          }
-          break;
-        }
-        
-        // Check time limit
+        // Check time limit every 10 iterations (matches C++)
         if (iter % 10 === 0) {
-          var elapsed = Date.now() - start_time;
-          if (elapsed > max_time_ms) {
+          var elapsed_time = Date.now() - start_time;
+          if (elapsed_time > max_time_ms) {
             console.log(`Time limit reached after ${iter} iterations`);
             break;
           }
         }
+        
+        // Progress logging every 200 iterations
+        if (iter % 200 === 0) {
+          var elapsed_time = Date.now() - start_time;
+          console.log(`Iter ${iter}: ${n_overlaps} overlaps, forces=${this.force_push.toExponential(1)}/${this.force_pull.toExponential(1)}, time=${(elapsed_time/1000).toFixed(2)}s`);
+        }
       }
       
-      var elapsed = Date.now() - start_time;
-      console.log(`Simulation complete: ${iter} iterations, ${elapsed}ms, ${n_overlaps} remaining overlaps`);
-      console.log(`Performance: ${(iter/elapsed*1000).toFixed(0)} iter/sec, best result: ${best_overlaps} overlaps`);
+      var elapsed_time = Date.now() - start_time;
       
-      // Final diagnostics
-      this.printDetailedDiagnostics();
+      // Final status message (matches C++)
+      if (elapsed_time > max_time_ms) {
+        console.log(`ggrepel: ${(max_time_ms/1000).toFixed(1)}s elapsed for ${iter} iterations, ${p_overlaps} overlaps. Consider increasing 'max.time'.`);
+      } else if (iter >= this.max_iter) {
+        console.log(`ggrepel: ${this.max_iter} iterations in ${(elapsed_time/1000).toFixed(3)}s, ${p_overlaps} overlaps. Consider increasing 'max.iter'.`);
+      } else {
+        console.log(`ggrepel: text repel complete in ${iter} iterations (${(elapsed_time/1000).toFixed(3)}s), ${p_overlaps} overlaps`);
+      }
       
       return n_overlaps === 0;
     },
@@ -1504,8 +1498,8 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
       const facetMinY = globalMinY;
       const facetMaxY = globalMaxY;
       // Scale down facet dimensions to match scaled labels
-      const facetWidth = (facetMaxX - facetMinX + 50) / 10; // Scale down by 10x
-      const facetHeight = globalYHeight / 10; // Use global Y height, scaled down by 10x
+      const facetWidth = (facetMaxX - facetMinX + 50) / 5; // Scale down by 5x
+      const facetHeight = globalYHeight / 5; // Use global Y height, scaled down by 5x
     
       // Create arrays for the labeler for this facet
       const labels = [];
@@ -1530,11 +1524,11 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         };
         
         anchors.push({
-          x: (cx - facetMinX + 25) / 10, // Translate to facet-relative coordinates, then scale down
-          y: (cy - facetMinY + 25) / 10, // Translate to facet-relative coordinates, then scale down
+          x: (cx - facetMinX + 25) / 5, // Scale down by 5x to match label scaling
+          y: (cy - facetMinY + 25) / 5, // Scale down by 5x to match label scaling
           bbox: paddedBBox, // Store the padded bounding box (still in absolute coordinates for visual)
-          // Use a much smaller radius closer to actual visual circle size
-          r: 0.5 // Small radius in scaled coordinates (5px when scaled back up)
+          // Use a smaller radius but larger than before due to less scaling
+          r: 1.0 // Radius in scaled coordinates (5px when scaled back up)
         });
       });
       
@@ -1565,15 +1559,15 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         const angle = globalSeededRandom.random() * 2 * Math.PI; // Full 360° around the point
         const distance = minDistance + globalSeededRandom.random() * extraDistance;
         
-        // SCALE DOWN label dimensions dramatically for D3-Labeler
-        const scaledWidth = (bbox.width * 0.85) / 10; // Scale down by 10x
-        const scaledHeight = (bbox.height * 1.1) / 10; // Scale down by 10x
+        // More reasonable scaling for C++ style physics
+        const scaledWidth = (bbox.width * 0.85) / 5; // Scale down by 5x instead of 10x
+        const scaledHeight = (bbox.height * 1.1) / 5; // Scale down by 5x instead of 10x
         
         console.log(`Label "${schoolName}": original ${bbox.width.toFixed(1)}x${bbox.height.toFixed(1)} -> scaled ${scaledWidth.toFixed(1)}x${scaledHeight.toFixed(1)}`);
 
         labels.push({
-          x: (cx - facetMinX + 25 + Math.cos(angle) * distance) / 10, // Translate to facet-relative, then scale down
-          y: (cy - facetMinY + 25 + Math.sin(angle) * distance) / 10, // Translate to facet-relative, then scale down
+          x: (cx - facetMinX + 25 + Math.cos(angle) * distance) / 5, // Scale down by 5x to match label scaling
+          y: (cy - facetMinY + 25 + Math.sin(angle) * distance) / 5, // Scale down by 5x to match label scaling
           name: schoolName,
           width: scaledWidth,
           height: scaledHeight,
@@ -1789,10 +1783,10 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         // Check for label-point overlaps using actual bounding boxes
         for (let j = 0; j < anchors.length; j++) {
           // Label bounding box (scaled coordinates, need to scale back up and translate)
-          const labelLeft = (labels[i].x * 10) + facetMinX - 25 - (labels[i].width * 10) / 2;
-          const labelRight = (labels[i].x * 10) + facetMinX - 25 + (labels[i].width * 10) / 2;
-          const labelTop = (labels[i].y * 10) + facetMinY - 25 - (labels[i].height * 10) * 0.7;
-          const labelBottom = (labels[i].y * 10) + facetMinY - 25 + (labels[i].height * 10) * 0.3;
+          const labelLeft = (labels[i].x * 5) + facetMinX - 25 - (labels[i].width * 5) / 2;
+          const labelRight = (labels[i].x * 5) + facetMinX - 25 + (labels[i].width * 5) / 2;
+          const labelTop = (labels[i].y * 5) + facetMinY - 25 - (labels[i].height * 5) * 0.7;
+          const labelBottom = (labels[i].y * 5) + facetMinY - 25 + (labels[i].height * 5) * 0.3;
           
           // Use actual point bounding box
           const pointBBox = anchors[j].bbox;
@@ -1842,16 +1836,16 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         .enter()
         .append("line")
         .attr("class", "leader-line")
-        .attr("x1", (d, i) => (anchors[i].x * 10) + facetMinX - 25) // Point position
-        .attr("y1", (d, i) => (anchors[i].y * 10) + facetMinY - 25) // Point position
+        .attr("x1", (d, i) => (anchors[i].x * 5) + facetMinX - 25) // Point position (scale by 5x)
+        .attr("y1", (d, i) => (anchors[i].y * 5) + facetMinY - 25) // Point position (scale by 5x)
         .attr("x2", (d, i) => {
           // Point coordinates
-          const pointX = (anchors[i].x * 10) + facetMinX - 25;
-          const pointY = (anchors[i].y * 10) + facetMinY - 25;
+          const pointX = (anchors[i].x * 5) + facetMinX - 25;
+          const pointY = (anchors[i].y * 5) + facetMinY - 25;
           
           // Label bounding box (center-justified, scaled up)
-          const labelCenterX = (d.x * 10) + facetMinX - 25;
-          const labelWidth = d.width * 10;
+          const labelCenterX = (d.x * 5) + facetMinX - 25;
+          const labelWidth = d.width * 5;
           
           const labelLeft = labelCenterX - labelWidth / 2;
           const labelRight = labelCenterX + labelWidth / 2;
@@ -1863,8 +1857,8 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         })
         .attr("y2", (d, i) => {
           // Label bounding box (center-justified, scaled up)
-          const labelCenterY = (d.y * 10) + facetMinY - 25;
-          const labelHeight = d.height * 10;
+          const labelCenterY = (d.y * 5) + facetMinY - 25;
+          const labelHeight = d.height * 5;
           
           const labelTop = labelCenterY - labelHeight * 0.7; // Match text positioning
           const labelBottom = labelCenterY + labelHeight * 0.3;
@@ -1885,8 +1879,8 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         .enter()
         .append("text")
         .attr("class", "school-label")
-        .attr("x", d => (d.x * 10) + facetMinX - 25) // Scale back up and translate to absolute coordinates
-        .attr("y", d => (d.y * 10) + facetMinY - 25) // Scale back up and translate to absolute coordinates
+        .attr("x", d => (d.x * 5) + facetMinX - 25) // Scale back up and translate to absolute coordinates
+        .attr("y", d => (d.y * 5) + facetMinY - 25) // Scale back up and translate to absolute coordinates
         .text(d => d.name)
         .style("font", "7px var(--sans-serif)")
         .style("fill", d => getSchoolLevelColor(d.schoolLevel)) // Use school level color
@@ -1903,8 +1897,8 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
           .attr("class", "plot-boundary")
           .attr("x", facetMinX - 25) // Position at actual facet origin (with margin)
           .attr("y", facetMinY - 25) // Position at actual facet origin (with margin)
-          .attr("width", facetWidth * 10) // Scale back up to visual coordinates
-          .attr("height", facetHeight * 10) // Scale back up to visual coordinates
+          .attr("width", facetWidth * 5) // Scale back up to visual coordinates
+          .attr("height", facetHeight * 5) // Scale back up to visual coordinates
           .attr("fill", "none")
           .attr("stroke", "red")
           .attr("stroke-width", 2)
@@ -1916,10 +1910,10 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
           .enter()
           .append("rect")
           .attr("class", "label-bbox")
-          .attr("x", d => (d.x * 10) + facetMinX - 25 - (d.width * 10) / 2) // Center-justified: subtract half width, translate to absolute coordinates
-          .attr("y", d => (d.y * 10) + facetMinY - 25 - (d.height * 10) * 0.7) // Scale back up and adjust positioning, translate to absolute coordinates
-          .attr("width", d => d.width * 10) // Scale back up to match actual label size
-          .attr("height", d => d.height * 10) // Scale back up to match actual label size
+          .attr("x", d => (d.x * 5) + facetMinX - 25 - (d.width * 5) / 2) // Center-justified: subtract half width, translate to absolute coordinates
+          .attr("y", d => (d.y * 5) + facetMinY - 25 - (d.height * 5) * 0.7) // Scale back up and adjust positioning, translate to absolute coordinates
+          .attr("width", d => d.width * 5) // Scale back up to match actual label size
+          .attr("height", d => d.height * 5) // Scale back up to match actual label size
           .attr("fill", "none")
           .attr("stroke", "blue")
           .attr("stroke-width", 1)
