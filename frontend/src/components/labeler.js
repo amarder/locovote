@@ -23,7 +23,8 @@ function createSchoolLabeler() {
       anc = [],
       w = 1, // box width
       h = 1, // box height
-      labelerObj = {};
+      labelerObj = {},
+      algorithm = 'physics'; // 'physics' or 'annealing'
 
   // ggrepel-style physics simulation parameters (adjusted for better convergence)
   var physics = {
@@ -612,6 +613,236 @@ function createSchoolLabeler() {
       }
       
       console.log(`=== END DIAGNOSTICS ===`);
+    }
+  };
+
+  // Simulated annealing algorithm implementation (based on annealing.js)
+  var annealing = {
+    max_move: 5.0,
+    max_angle: 0.5,
+    acc: 0,
+    rej: 0,
+    
+    // weights for energy function
+    w_len: 0.2,        // leader line length 
+    w_inter: 1.0,      // leader line intersection
+    w_lab2: 30.0,      // label-label overlap
+    w_lab_anc: 30.0,   // label-anchor overlap
+    w_orient: 3.0,     // orientation bias
+    
+    // Energy function for label placement
+    energy: function(index) {
+      var m = lab.length, 
+          ener = 0,
+          dx = lab[index].x - anc[index].x,
+          dy = anc[index].y - lab[index].y,
+          dist = Math.sqrt(dx * dx + dy * dy),
+          overlap = true,
+          amount = 0,
+          theta = 0;
+
+      // penalty for length of leader line
+      if (dist > 0) ener += dist * this.w_len;
+
+      // label orientation bias
+      dx /= dist;
+      dy /= dist;
+      if (dx > 0 && dy > 0) { ener += 0 * this.w_orient; }
+      else if (dx < 0 && dy > 0) { ener += 1 * this.w_orient; }
+      else if (dx < 0 && dy < 0) { ener += 2 * this.w_orient; }
+      else { ener += 3 * this.w_orient; }
+
+      var x21 = lab[index].x,
+          y21 = lab[index].y - lab[index].height + 2.0,
+          x22 = lab[index].x + lab[index].width,
+          y22 = lab[index].y + 2.0;
+      var x11, x12, y11, y12, x_overlap, y_overlap, overlap_area;
+
+      for (var i = 0; i < m; i++) {
+        if (i != index) {
+          // penalty for intersection of leader lines
+          overlap = this.intersect(anc[index].x, lab[index].x, anc[i].x, lab[i].x,
+                          anc[index].y, lab[index].y, anc[i].y, lab[i].y);
+          if (overlap) ener += this.w_inter;
+
+          // penalty for label-label overlap
+          x11 = lab[i].x;
+          y11 = lab[i].y - lab[i].height + 2.0;
+          x12 = lab[i].x + lab[i].width;
+          y12 = lab[i].y + 2.0;
+          x_overlap = Math.max(0, Math.min(x12,x22) - Math.max(x11,x21));
+          y_overlap = Math.max(0, Math.min(y12,y22) - Math.max(y11,y21));
+          overlap_area = x_overlap * y_overlap;
+          ener += (overlap_area * this.w_lab2);
+        }
+
+        // penalty for label-anchor overlap
+        x11 = anc[i].x - anc[i].r;
+        y11 = anc[i].y - anc[i].r;
+        x12 = anc[i].x + anc[i].r;
+        y12 = anc[i].y + anc[i].r;
+        x_overlap = Math.max(0, Math.min(x12,x22) - Math.max(x11,x21));
+        y_overlap = Math.max(0, Math.min(y12,y22) - Math.max(y11,y21));
+        overlap_area = x_overlap * y_overlap;
+        ener += (overlap_area * this.w_lab_anc);
+      }
+      return ener;
+    },
+
+    // Monte Carlo translation move
+    mcmove: function(currT) {
+      // select a random label
+      var i = Math.floor(globalSeededRandom.random() * lab.length); 
+
+      // save old coordinates
+      var x_old = lab[i].x;
+      var y_old = lab[i].y;
+
+      // old energy
+      var old_energy = this.energy(i);
+
+      // random translation
+      lab[i].x += (globalSeededRandom.random() - 0.5) * this.max_move;
+      lab[i].y += (globalSeededRandom.random() - 0.5) * this.max_move;
+
+      // hard wall boundaries
+      if (lab[i].x > w) lab[i].x = x_old;
+      if (lab[i].x < 0) lab[i].x = x_old;
+      if (lab[i].y > h) lab[i].y = y_old;
+      if (lab[i].y < 0) lab[i].y = y_old;
+
+      // new energy
+      var new_energy = this.energy(i);
+
+      // delta E
+      var delta_energy = new_energy - old_energy;
+
+      if (globalSeededRandom.random() < Math.exp(-delta_energy / currT)) {
+        this.acc += 1;
+      } else {
+        // move back to old coordinates
+        lab[i].x = x_old;
+        lab[i].y = y_old;
+        this.rej += 1;
+      }
+    },
+
+    // Monte Carlo rotation move
+    mcrotate: function(currT) {
+      // select a random label
+      var i = Math.floor(globalSeededRandom.random() * lab.length); 
+
+      // save old coordinates
+      var x_old = lab[i].x;
+      var y_old = lab[i].y;
+
+      // old energy
+      var old_energy = this.energy(i);
+
+      // random angle
+      var angle = (globalSeededRandom.random() - 0.5) * this.max_angle;
+
+      var s = Math.sin(angle);
+      var c = Math.cos(angle);
+
+      // translate label (relative to anchor at origin):
+      lab[i].x -= anc[i].x;
+      lab[i].y -= anc[i].y;
+
+      // rotate label
+      var x_new = lab[i].x * c - lab[i].y * s,
+          y_new = lab[i].x * s + lab[i].y * c;
+
+      // translate label back
+      lab[i].x = x_new + anc[i].x;
+      lab[i].y = y_new + anc[i].y;
+
+      // hard wall boundaries
+      if (lab[i].x > w) lab[i].x = x_old;
+      if (lab[i].x < 0) lab[i].x = x_old;
+      if (lab[i].y > h) lab[i].y = y_old;
+      if (lab[i].y < 0) lab[i].y = y_old;
+
+      // new energy
+      var new_energy = this.energy(i);
+
+      // delta E
+      var delta_energy = new_energy - old_energy;
+
+      if (globalSeededRandom.random() < Math.exp(-delta_energy / currT)) {
+        this.acc += 1;
+      } else {
+        // move back to old coordinates
+        lab[i].x = x_old;
+        lab[i].y = y_old;
+        this.rej += 1;
+      }
+    },
+
+    // Line intersection test
+    intersect: function(x1, x2, x3, x4, y1, y2, y3, y4) {
+      // returns true if two lines intersect, else false
+      // from http://paulbourke.net/geometry/lineline2d/
+      var mua, mub;
+      var denom, numera, numerb;
+
+      denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+      numera = (x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3);
+      numerb = (x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3);
+
+      /* Is the intersection along the the segments */
+      mua = numera / denom;
+      mub = numerb / denom;
+      if (!(mua < 0 || mua > 1 || mub < 0 || mub > 1)) {
+          return true;
+      }
+      return false;
+    },
+
+    // Linear cooling schedule
+    cooling_schedule: function(currT, initialT, nsweeps) {
+      return (currT - (initialT / nsweeps));
+    },
+
+    // Main simulated annealing function
+    runSimulation: function(nsweeps) {
+      console.log(`=== STARTING SIMULATED ANNEALING OPTIMIZATION ===`);
+      console.log(`Parameters: nsweeps=${nsweeps}, max_move=${this.max_move}, max_angle=${this.max_angle}`);
+      console.log(`Energy weights: w_len=${this.w_len}, w_inter=${this.w_inter}, w_lab2=${this.w_lab2}, w_lab_anc=${this.w_lab_anc}, w_orient=${this.w_orient}`);
+      
+      var m = lab.length,
+          currT = 1.0,
+          initialT = 1.0;
+
+      this.acc = 0;
+      this.rej = 0;
+      
+      var start_time = Date.now();
+
+      for (var i = 0; i < nsweeps; i++) {
+        for (var j = 0; j < m; j++) { 
+          if (globalSeededRandom.random() < 0.5) { 
+            this.mcmove(currT); 
+          } else { 
+            this.mcrotate(currT); 
+          }
+        }
+        currT = this.cooling_schedule(currT, initialT, nsweeps);
+        
+        // Progress logging every 100 sweeps
+        if (i % 100 === 0 && i > 0) {
+          var elapsed_time = Date.now() - start_time;
+          var acceptance_rate = (this.acc / (this.acc + this.rej) * 100).toFixed(1);
+          console.log(`Sweep ${i}: T=${currT.toFixed(4)}, acceptance=${acceptance_rate}%, time=${(elapsed_time/1000).toFixed(2)}s`);
+        }
+      }
+      
+      var elapsed_time = Date.now() - start_time;
+      var acceptance_rate = (this.acc / (this.acc + this.rej) * 100).toFixed(1);
+      console.log(`Annealing complete: ${nsweeps} sweeps in ${(elapsed_time/1000).toFixed(3)}s, final acceptance rate: ${acceptance_rate}%`);
+      console.log(`=== END SIMULATED ANNEALING ===`);
+      
+      return true;
     }
   };
 
@@ -1291,11 +1522,10 @@ function createSchoolLabeler() {
   // Utility functions removed - no longer needed for force-directed approach
 
   labelerObj.start = function(iterations) {
-    // ggrepel-style physics-based label optimization
     var m = lab.length;
     if (m === 0) return;
 
-    console.log(`=== STARTING GGREPEL-STYLE LABEL OPTIMIZATION: ${m} labels ===`);
+    console.log(`=== STARTING LABEL OPTIMIZATION: ${m} labels using ${algorithm.toUpperCase()} algorithm ===`);
     console.log(`Boundary constraints: width=${w.toFixed(2)}, height=${h.toFixed(2)}`);
 
     // Add small random jitter to initial positions to break symmetries (using seeded random)
@@ -1305,10 +1535,17 @@ function createSchoolLabeler() {
       lab[i].y += (globalSeededRandom.random() - 0.5) * jitter;
     }
 
-    // Run ggrepel-style physics simulation
-    var success = physics.runSimulation();
+    var success;
     
-    // Calculate final statistics
+    if (algorithm === 'annealing') {
+      // Run simulated annealing optimization
+      success = annealing.runSimulation(iterations || 1000);
+    } else {
+      // Run ggrepel-style physics simulation (default)
+      success = physics.runSimulation();
+    }
+    
+    // Calculate final statistics (common for both algorithms)
     var totalLineLength = 0;
     var labelOverlaps = 0;
     var pointOverlaps = 0;
@@ -1319,23 +1556,38 @@ function createSchoolLabeler() {
       var dy = lab[i].y - anc[i].y;
       totalLineLength += Math.sqrt(dx * dx + dy * dy);
       
-      // Calculate label-label overlap areas using physics collision detection
-      var labelBox = physics.labelToBox(lab[i]);
+      // Calculate label-label overlaps
+      var x1 = lab[i].x - lab[i].width / 2;
+      var y1 = lab[i].y - lab[i].height + 0.2;
+      var x2 = lab[i].x + lab[i].width / 2;
+      var y2 = lab[i].y + 0.2;
+      
       for (var j = i + 1; j < m; j++) {
-        var otherBox = physics.labelToBox(lab[j]);
-        if (physics.boxesOverlap(labelBox, otherBox)) {
+        var ox1 = lab[j].x - lab[j].width / 2;
+        var oy1 = lab[j].y - lab[j].height + 0.2;
+        var ox2 = lab[j].x + lab[j].width / 2;
+        var oy2 = lab[j].y + 0.2;
+        
+        var overlap_x = Math.max(0, Math.min(x2, ox2) - Math.max(x1, ox1));
+        var overlap_y = Math.max(0, Math.min(y2, oy2) - Math.max(y1, oy1));
+        
+        if (overlap_x > 0 && overlap_y > 0) {
           labelOverlaps++;
-          // Calculate overlap area for main results
-          var overlap_x = Math.max(0, Math.min(labelBox.x2, otherBox.x2) - Math.max(labelBox.x1, otherBox.x1));
-          var overlap_y = Math.max(0, Math.min(labelBox.y2, otherBox.y2) - Math.max(labelBox.y1, otherBox.y1));
           totalOverlapArea += overlap_x * overlap_y;
         }
       }
       
-      // Calculate point overlap areas using physics collision detection
+      // Calculate point overlaps
       for (var j = 0; j < anc.length; j++) {
-        var anchorCircle = physics.anchorToCircle(anc[j]);
-        if (physics.circleBoxOverlap(anchorCircle, labelBox)) {
+        var anchorLeft = anc[j].x - anc[j].r;
+        var anchorTop = anc[j].y - anc[j].r;
+        var anchorRight = anc[j].x + anc[j].r;
+        var anchorBottom = anc[j].y + anc[j].r;
+        
+        var overlap_x = Math.max(0, Math.min(x2, anchorRight) - Math.max(x1, anchorLeft));
+        var overlap_y = Math.max(0, Math.min(y2, anchorBottom) - Math.max(y1, anchorTop));
+        
+        if (overlap_x > 0 && overlap_y > 0) {
           pointOverlaps++;
         }
       }
@@ -1349,8 +1601,8 @@ function createSchoolLabeler() {
     var overlapPercentage = totalLabelArea > 0 ? (totalOverlapArea / totalLabelArea * 100) : 0;
     
     console.log(`Results: Avg leader length: ${(totalLineLength / m).toFixed(1)}px, Label overlaps: ${labelOverlaps} (${totalOverlapArea.toFixed(2)} area, ${overlapPercentage.toFixed(1)}% obscured), Point overlaps: ${pointOverlaps}`);
-    console.log(`Simulation ${success ? 'CONVERGED' : 'INCOMPLETE'}`);
-    console.log(`=== END GGREPEL OPTIMIZATION ===`);
+    console.log(`Optimization ${success ? 'COMPLETED' : 'INCOMPLETE'}`);
+    console.log(`=== END ${algorithm.toUpperCase()} OPTIMIZATION ===`);
     
     return labelerObj;
   };
@@ -1383,15 +1635,24 @@ function createSchoolLabeler() {
     return labelerObj;
   };
 
+  labelerObj.algorithm = function(x) {
+  // users set optimization algorithm: 'physics' or 'annealing'
+    if (!arguments.length) return algorithm;
+    algorithm = x;
+    return labelerObj;
+  };
+
   // Alternative energy and schedule functions removed - not needed for force-directed approach
 
   return labelerObj;
 };
 
 // Simplified auto-labeling function specifically for Cambridge schools plots
-export function addSchoolLabels(plotElement, data, xField, yField, textField, d3) {
-  // Debug flag to control visibility of bounding boxes and plot boundaries
-  const showDebugBoxes = false;
+export function addSchoolLabels(plotElement, data, xField, yField, textField, d3, options = {}) {
+  // Extract options with defaults
+  const algorithm = options.algorithm || 'physics'; // 'physics' or 'annealing'
+  const iterations = options.iterations || (algorithm === 'annealing' ? 1000 : 100);
+  const showDebugBoxes = options.showDebugBoxes || false;
   
   // Add labels directly to the plot after it's rendered
   const container = d3.select(plotElement);
@@ -1583,7 +1844,7 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
       
       // OPTIMIZATION DEBUG: Log current parameter settings and results
       console.log(`=== LABELER OPTIMIZATION DEBUG - Facet ${facetIndex} ===`);
-              console.log(`Parameters: w_len=0.01, w_inter=1.0, w_lab2=100.0, w_lab_anc=300.0, w_orient=2.0`);
+      console.log(`Algorithm: ${algorithm}, Iterations: ${iterations}`);
       console.log(`Inputs: ${labels.length} labels, ${anchors.length} anchors, dimensions: ${facetWidth}x${facetHeight}`);
       
       // Create color mapping function matching the plot's color scheme
@@ -1597,13 +1858,14 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         }
       };
 
-      // Apply ggrepel-style physics optimization for this facet
+      // Apply selected optimization algorithm for this facet
       const labeler = createSchoolLabeler()
         .label(labels)
         .anchor(anchors) 
         .width(facetWidth)
         .height(facetHeight)
-        .start(100); // Physics simulation iterations (parameter not used in new implementation)
+        .algorithm(algorithm)
+        .start(iterations);
       
       // Post-process labels to ensure they never overlap their own anchor points
       labels.forEach((label, i) => {

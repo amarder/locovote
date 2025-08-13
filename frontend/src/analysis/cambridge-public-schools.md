@@ -142,8 +142,11 @@ async function createSchoolSubjectPlot() {
     ]
   });
 
-  // Apply auto-labeling to the plot
-  const plotWithLabels = addSchoolLabels(subjectPlot, enrichedData, "share_white", "progress", "school", d3);
+  // Apply auto-labeling to the plot using simulated annealing algorithm
+  const plotWithLabels = addSchoolLabels(subjectPlot, enrichedData, "share_white", "progress", "school", d3, {
+    algorithm: 'physics',
+    iterations: 1000
+  });
 
   return html`<div class="card">
     <h3>Test Score Progress vs School Demographics by Subject</h3>
@@ -151,7 +154,7 @@ async function createSchoolSubjectPlot() {
       Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       The dashed line marks typical growth (50). Red trend lines show the correlation between demographics and growth.
-      School names are automatically positioned to avoid overlaps using D3-Labeler.
+      School names are automatically positioned to avoid overlaps using simulated annealing optimization.
     </p>
     ${plotWithLabels}
   </div>`;
@@ -277,8 +280,11 @@ async function createSchoolLevelsPlot() {
     ]
   });
 
-  // Apply auto-labeling to the plot
-  const plotWithLabels = addSchoolLabels(levelsPlot, enrichedLevelsData, "share_white", "pct_meeting_exceeding", "school", d3);
+  // Apply auto-labeling to the plot using simulated annealing algorithm
+  const plotWithLabels = addSchoolLabels(levelsPlot, enrichedLevelsData, "share_white", "pct_meeting_exceeding", "school", d3, {
+    algorithm: 'physics',
+    iterations: 1000
+  });
 
   return html`<div class="card">
     <h3>Test Score Levels vs School Demographics by Subject</h3>
@@ -286,7 +292,7 @@ async function createSchoolLevelsPlot() {
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       Red trend lines show the correlation between demographics and achievement levels.
-      School names are automatically positioned to avoid overlaps using D3-Labeler.
+      School names are automatically positioned to avoid overlaps using simulated annealing optimization.
     </p>
     ${plotWithLabels}
   </div>`;
