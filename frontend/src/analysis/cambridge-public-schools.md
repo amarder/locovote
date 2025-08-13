@@ -19,6 +19,13 @@ Eugenia saw Locovote and thought there might be an opportunity to collaborate.
 
 For Cambridge, I think it makes sense to compare schools using test score progress and race-balanced progress measures. I include test score levels since this is how schools are often compared. If you're curious to learn more about the pros and cons of the various measures see the [school metrics page](/school-metrics).
 
+```js
+const showLabels = Inputs.toggle({label: "Label points with school names", value: false});
+const showLabelsValue = Generators.input(showLabels);
+```
+
+${showLabels}
+
 ## Test Score Progress
 
 ```js
@@ -142,11 +149,13 @@ async function createSchoolSubjectPlot() {
     ]
   });
 
-  // Apply auto-labeling to the plot using simulated annealing algorithm
-  const plotWithLabels = addSchoolLabels(subjectPlot, enrichedData, "share_white", "progress", "school", d3, {
-    algorithm: 'physics',
-    iterations: 1000
-  });
+  // Conditionally apply auto-labeling based on toggle
+  const finalPlot = showLabelsValue ? 
+    addSchoolLabels(subjectPlot, enrichedData, "share_white", "progress", "school", d3, {
+      algorithm: 'physics',
+      iterations: 1000
+    }) : 
+    subjectPlot;
 
   return html`<div class="card">
     <h3>Test Score Progress vs School Demographics by Subject</h3>
@@ -154,9 +163,9 @@ async function createSchoolSubjectPlot() {
       Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       The dashed line marks typical growth (50). Red trend lines show the correlation between demographics and growth.
-      School names are automatically positioned to avoid overlaps using simulated annealing optimization.
+      ${showLabelsValue ? "School names are automatically positioned to avoid overlaps using simulated annealing optimization." : "Hover over points to see school names."}
     </p>
-    ${plotWithLabels}
+    ${finalPlot}
   </div>`;
 }
 
@@ -280,11 +289,13 @@ async function createSchoolLevelsPlot() {
     ]
   });
 
-  // Apply auto-labeling to the plot using simulated annealing algorithm
-  const plotWithLabels = addSchoolLabels(levelsPlot, enrichedLevelsData, "share_white", "pct_meeting_exceeding", "school", d3, {
-    algorithm: 'physics',
-    iterations: 1000
-  });
+  // Conditionally apply auto-labeling based on toggle
+  const finalPlot = showLabelsValue ? 
+    addSchoolLabels(levelsPlot, enrichedLevelsData, "share_white", "pct_meeting_exceeding", "school", d3, {
+      algorithm: 'physics',
+      iterations: 1000
+    }) : 
+    levelsPlot;
 
   return html`<div class="card">
     <h3>Test Score Levels vs School Demographics by Subject</h3>
@@ -292,9 +303,9 @@ async function createSchoolLevelsPlot() {
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       Red trend lines show the correlation between demographics and achievement levels.
-      School names are automatically positioned to avoid overlaps using simulated annealing optimization.
+      ${showLabelsValue ? "School names are automatically positioned to avoid overlaps using simulated annealing optimization." : "Hover over points to see school names."}
     </p>
-    ${plotWithLabels}
+    ${finalPlot}
   </div>`;
 }
 
