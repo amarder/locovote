@@ -2,7 +2,7 @@
 
 // Global seedable random number generator for consistent label placement
 var globalSeededRandom = {
-  seed: 12345,
+  seed: 1234,
   state: 12345,
   
   // Simple LCG (Linear Congruential Generator) for deterministic randomness
@@ -27,16 +27,16 @@ function createSchoolLabeler() {
 
   // ggrepel-style physics simulation parameters (optimized for SHORT leader lines with acceptable overlaps)
   var physics = {
-    force_push: 2e-6,     // Repulsion force magnitude (doubled based on low velocity)
-    force_pull: 1.5e-7,   // Spring force magnitude (increased significantly to pull labels closer)
-    max_time: 0.3,        // Maximum simulation time in seconds (more time for convergence)
-    max_iter: 4000,       // Maximum iterations (increased further)
-    velocity_decay: 0.75, // Velocity damping factor (reduced to maintain momentum)
+    force_push: 1e-6,     // Repulsion force magnitude (reduced to allow closer positioning)
+    force_pull: 2e-6,     // Spring force magnitude (much stronger than repulsion!)
+    max_time: 0.5,        // Maximum simulation time in seconds (more time for convergence)
+    max_iter: 8000,       // Maximum iterations (doubled for better convergence)
+    velocity_decay: 0.8,  // Velocity damping factor (slightly higher for more gradual convergence)
     temperature: 10.0,    // Simulated annealing temperature
-    cooling_rate: 0.99995, // Temperature cooling rate (slower cooling to maintain forces)
+    cooling_rate: 0.99998, // Temperature cooling rate (even slower cooling to maintain forces longer)
     force_point_size: 250.0, // Multiplier for point repulsion forces (much stronger based on diagnostics)
     min_improvement_threshold: 0.01, // Minimum improvement to continue
-    distance_pull_strength: 5.0, // Multiplier for distance-squared anchor pull force (much stronger!)
+    fixed_anchor_pull: 5e-7, // Fixed coefficient for distance-squared attraction force to anchor
     
     // Use global seeded random for consistency
     seededRandom: function() {
@@ -255,12 +255,38 @@ function createSchoolLabeler() {
           }
         }
         
-        // ALWAYS apply attractive force from the label's own anchor point (regardless of overlaps)
+        // ALWAYS apply attractive force from the label's own anchor point (but with minimum distance constraint)
         if (i < anc.length) {
           var anchor_pos = { x: anc[i].x, y: anc[i].y };
-          var anchor_pull = this.distanceSquaredSpringForce(labelCenter, anchor_pos, this.force_pull * this.distance_pull_strength);
-          force.x += anchor_pull.x;
-          force.y += anchor_pull.y;
+          var anchor_circle = this.anchorToCircle(anc[i]);
+          
+          // Check if label is too close to its own anchor point
+          var dist_to_anchor = this.euclid(labelCenter, anchor_pos);
+          var label_size = Math.max(lab[i].width, lab[i].height);
+          var min_safe_distance = anchor_circle.r + label_size / 2 + 0.2; // Circle + label size + buffer
+          
+          if (dist_to_anchor < min_safe_distance) {
+            // Apply strong repulsion from own anchor if too close
+            var repel_from_anchor = this.repelForce(labelCenter, anchor_pos, this.force_push * 50.0);
+            force.x += repel_from_anchor.x;
+            force.y += repel_from_anchor.y;
+          } else {
+            // Fixed coefficient with distance-squared attraction to anchor
+            var dx = anchor_pos.x - labelCenter.x;
+            var dy = anchor_pos.y - labelCenter.y;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > 0) {
+              // Force increases with square of distance - stronger pull when farther away
+              var distance_squared = distance * distance;
+              var force_magnitude = this.fixed_anchor_pull * distance_squared;
+              var unit_x = dx / distance;
+              var unit_y = dy / distance;
+              
+              force.x += unit_x * force_magnitude;
+              force.y += unit_y * force_magnitude;
+            }
+          }
         }
         
         // Update velocity with damping (reduced damping for overlapping labels)
@@ -302,9 +328,7 @@ function createSchoolLabeler() {
         label.y = newBox.y2 - 0.2;
       }
       
-      // Decay forces over time (slower decay to maintain effectiveness)
-      this.force_push *= 0.999995;
-      this.force_pull *= 0.99999;
+      // Keep forces constant - no decay for consistent optimization
       this.temperature *= this.cooling_rate;
       
       return n_overlaps;
@@ -324,8 +348,8 @@ function createSchoolLabeler() {
       }
       
       // Reset force parameters to initial values
-      this.force_push = 2e-6;
-      this.force_pull = 1.5e-7;
+      this.force_push = 1e-6;
+      this.force_pull = 2e-6;
       this.temperature = 10.0;
     },
     
@@ -343,7 +367,7 @@ function createSchoolLabeler() {
       var n_overlaps = 1;
       var prev_overlaps = Infinity;
       var stagnant_iterations = 0;
-      var max_stagnant = 400; // Increased based on diagnostics showing early termination
+      var max_stagnant = 800; // Doubled to allow more time for fine-tuning
       var best_overlaps = Infinity;
       var total_velocity = 0;
       var force_history = [];
@@ -1372,6 +1396,9 @@ function createSchoolLabeler() {
 
 // Simplified auto-labeling function specifically for Cambridge schools plots
 export function addSchoolLabels(plotElement, data, xField, yField, textField, d3) {
+  // Debug flag to control visibility of bounding boxes and plot boundaries
+  const showDebugBoxes = false;
+  
   // Add labels directly to the plot after it's rendered
   const container = d3.select(plotElement);
   
@@ -1532,9 +1559,9 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         tempText.text(schoolName);
         const bbox = tempText.node().getBBox();
         
-        // Start labels in any direction around their points (using seeded random for consistency)
-        const minDistance = 25; // Minimum distance from point
-        const extraDistance = 15; // Additional random distance
+        // Start labels very close to their points (using seeded random for consistency)
+        const minDistance = 8; // Much smaller minimum distance from point
+        const extraDistance = 5; // Much smaller additional random distance
         const angle = globalSeededRandom.random() * 2 * Math.PI; // Full 360° around the point
         const distance = minDistance + globalSeededRandom.random() * extraDistance;
         
@@ -1584,20 +1611,75 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         .height(facetHeight)
         .start(100); // Physics simulation iterations (parameter not used in new implementation)
       
-      // Post-process labels to optimize distances
+      // Post-process labels to ensure they never overlap their own anchor points
       labels.forEach((label, i) => {
         const anchor = anchors[i];
         
-        // Ensure minimum distance from anchor point (considering circle radius)
-        const dx = label.x - anchor.x;
-        const dy = label.y - anchor.y;
-        const currentDist = Math.sqrt(dx * dx + dy * dy);
-        const minRequired = anchor.r + 0; // Circle radius + minimal clearance
+        // Calculate label bounding box in scaled coordinates
+        const labelLeft = label.x - label.width / 2;
+        const labelRight = label.x + label.width / 2;
+        const labelTop = label.y - label.height * 0.7;
+        const labelBottom = label.y + label.height * 0.3;
         
-        if (currentDist < minRequired) {
-          const angle = Math.atan2(dy, dx);
-          label.x = anchor.x + Math.cos(angle) * minRequired;
-          label.y = anchor.y + Math.sin(angle) * minRequired;
+        // Check if label bounding box overlaps with anchor circle
+        const closestX = Math.max(labelLeft, Math.min(anchor.x, labelRight));
+        const closestY = Math.max(labelTop, Math.min(anchor.y, labelBottom));
+        const distanceToLabel = Math.sqrt((anchor.x - closestX) ** 2 + (anchor.y - closestY) ** 2);
+        
+        // If anchor circle overlaps with label, push label away
+        if (distanceToLabel < anchor.r + 0.1) { // Small buffer for clearance
+          // Find the direction from anchor center to label center
+          const dx = label.x - anchor.x;
+          const dy = label.y - anchor.y;
+          const currentDist = Math.sqrt(dx * dx + dy * dy);
+          
+          if (currentDist > 0) {
+            // Calculate minimum distance needed (from anchor center to label edge + circle radius + buffer)
+            const minDistToLabelEdge = Math.max(label.width / 2, label.height / 2); // Distance to farthest label edge
+            const minRequired = anchor.r + minDistToLabelEdge + 0.2; // Circle radius + label size + buffer
+            
+            // Try different angles to find a position that keeps label in bounds
+            const originalAngle = Math.atan2(dy, dx);
+            const angleSteps = [0, Math.PI/4, -Math.PI/4, Math.PI/2, -Math.PI/2, 3*Math.PI/4, -3*Math.PI/4, Math.PI];
+            let bestAngle = originalAngle;
+            let bestX = anchor.x + Math.cos(originalAngle) * minRequired;
+            let bestY = anchor.y + Math.sin(originalAngle) * minRequired;
+            
+            // Check if original position is in bounds
+            const bounds = { x1: 0.5, y1: 0.5, x2: facetWidth - 0.5, y2: facetHeight - 0.5 };
+            const testLabelLeft = bestX - label.width / 2;
+            const testLabelRight = bestX + label.width / 2;
+            const testLabelTop = bestY - label.height * 0.7;
+            const testLabelBottom = bestY + label.height * 0.3;
+            
+            const isOriginalInBounds = testLabelLeft >= bounds.x1 && testLabelRight <= bounds.x2 && 
+                                     testLabelTop >= bounds.y1 && testLabelBottom <= bounds.y2;
+            
+            if (!isOriginalInBounds) {
+              // Try alternative angles to find a position that stays in bounds
+              for (const angleOffset of angleSteps) {
+                const testAngle = originalAngle + angleOffset;
+                const testX = anchor.x + Math.cos(testAngle) * minRequired;
+                const testY = anchor.y + Math.sin(testAngle) * minRequired;
+                
+                const testLeft = testX - label.width / 2;
+                const testRight = testX + label.width / 2;
+                const testTop = testY - label.height * 0.7;
+                const testBottom = testY + label.height * 0.3;
+                
+                if (testLeft >= bounds.x1 && testRight <= bounds.x2 && 
+                    testTop >= bounds.y1 && testBottom <= bounds.y2) {
+                  bestX = testX;
+                  bestY = testY;
+                  break;
+                }
+              }
+            }
+            
+            // Apply the best position found
+            label.x = bestX;
+            label.y = bestY;
+          }
         }
       });
       
@@ -1633,6 +1715,40 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
             label.x = newX;
             label.y = newY;
           }
+        }
+      });
+      
+      // Final boundary enforcement - ensure ALL labels are within plot bounds
+      labels.forEach((label, i) => {
+        const bounds = { x1: 0.5, y1: 0.5, x2: facetWidth - 0.5, y2: facetHeight - 0.5 };
+        
+        // Calculate label bounding box
+        let labelLeft = label.x - label.width / 2;
+        let labelRight = label.x + label.width / 2;
+        let labelTop = label.y - label.height * 0.7;
+        let labelBottom = label.y + label.height * 0.3;
+        
+        // Clamp to boundaries if needed
+        let adjusted = false;
+        
+        if (labelLeft < bounds.x1) {
+          label.x = bounds.x1 + label.width / 2;
+          adjusted = true;
+        } else if (labelRight > bounds.x2) {
+          label.x = bounds.x2 - label.width / 2;
+          adjusted = true;
+        }
+        
+        if (labelTop < bounds.y1) {
+          label.y = bounds.y1 + label.height * 0.7;
+          adjusted = true;
+        } else if (labelBottom > bounds.y2) {
+          label.y = bounds.y2 - label.height * 0.3;
+          adjusted = true;
+        }
+        
+        if (adjusted) {
+          console.log(`Boundary adjustment for label "${label.name}": moved to stay within plot bounds`);
         }
       });
       
@@ -1702,21 +1818,23 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
       const labelGroup = facetGroup.insert("g", ":first-child")
         .attr("class", `school-labels-facet-${facetIndex}`);
       
-      // DEBUG: Draw bounding boxes for points
-      const pointBoxes = labelGroup.selectAll(".point-bbox")
-        .data(anchors)
-        .enter()
-        .append("rect")
-        .attr("class", "point-bbox")
-        .attr("x", d => d.bbox.x) // Keep original scale - this was already correct
-        .attr("y", d => d.bbox.y) // Keep original scale - this was already correct
-        .attr("width", d => d.bbox.width) // Keep original scale - this was already correct
-        .attr("height", d => d.bbox.height) // Keep original scale - this was already correct
-        .attr("fill", "none")
-        .attr("stroke", "red")
-        .attr("stroke-width", 1)
-        .attr("stroke-dasharray", "2,2")
-        .attr("opacity", 0.7);
+      // DEBUG: Draw bounding boxes for points (only if debug is enabled)
+      if (showDebugBoxes) {
+        const pointBoxes = labelGroup.selectAll(".point-bbox")
+          .data(anchors)
+          .enter()
+          .append("rect")
+          .attr("class", "point-bbox")
+          .attr("x", d => d.bbox.x) // Keep original scale - this was already correct
+          .attr("y", d => d.bbox.y) // Keep original scale - this was already correct
+          .attr("width", d => d.bbox.width) // Keep original scale - this was already correct
+          .attr("height", d => d.bbox.height) // Keep original scale - this was already correct
+          .attr("fill", "none")
+          .attr("stroke", "red")
+          .attr("stroke-width", 1)
+          .attr("stroke-dasharray", "2,2")
+          .attr("opacity", 0.7);
+      }
       
       // Add leader lines with optimal endpoints using bounding box
       const leaderLines = labelGroup.selectAll(".leader-line")
@@ -1779,34 +1897,35 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         .style("paint-order", "stroke")
         .style("opacity", "1.0");
       
-      // DEBUG: Draw plot boundary rectangle
-      labelGroup.append("rect")
-        .attr("class", "plot-boundary")
-        .attr("x", facetMinX - 25) // Position at actual facet origin (with margin)
-        .attr("y", facetMinY - 25) // Position at actual facet origin (with margin)
-        .attr("width", facetWidth * 10) // Scale back up to visual coordinates
-        .attr("height", facetHeight * 10) // Scale back up to visual coordinates
-        .attr("fill", "none")
-        .attr("stroke", "red")
-        .attr("stroke-width", 2)
-        .attr("stroke-dasharray", "5,5")
-        .attr("opacity", 0.8);
+      // DEBUG: Draw plot boundary rectangle and label bounding boxes (only if debug is enabled)
+      if (showDebugBoxes) {
+        labelGroup.append("rect")
+          .attr("class", "plot-boundary")
+          .attr("x", facetMinX - 25) // Position at actual facet origin (with margin)
+          .attr("y", facetMinY - 25) // Position at actual facet origin (with margin)
+          .attr("width", facetWidth * 10) // Scale back up to visual coordinates
+          .attr("height", facetHeight * 10) // Scale back up to visual coordinates
+          .attr("fill", "none")
+          .attr("stroke", "red")
+          .attr("stroke-width", 2)
+          .attr("stroke-dasharray", "5,5")
+          .attr("opacity", 0.8);
 
-      // DEBUG: Draw bounding boxes for labels
-      const labelBoxes = labelGroup.selectAll(".label-bbox")
-        .data(labels)
-        .enter()
-        .append("rect")
-        .attr("class", "label-bbox")
-        .attr("x", d => (d.x * 10) + facetMinX - 25 - (d.width * 10) / 2) // Center-justified: subtract half width, translate to absolute coordinates
-        .attr("y", d => (d.y * 10) + facetMinY - 25 - (d.height * 10) * 0.7) // Scale back up and adjust positioning, translate to absolute coordinates
-        .attr("width", d => d.width * 10) // Scale back up to match actual label size
-        .attr("height", d => d.height * 10) // Scale back up to match actual label size
-        .attr("fill", "none")
-        .attr("stroke", "blue")
-        .attr("stroke-width", 1)
-        .attr("stroke-dasharray", "3,3")
-        .attr("opacity", 0.8);
+        const labelBoxes = labelGroup.selectAll(".label-bbox")
+          .data(labels)
+          .enter()
+          .append("rect")
+          .attr("class", "label-bbox")
+          .attr("x", d => (d.x * 10) + facetMinX - 25 - (d.width * 10) / 2) // Center-justified: subtract half width, translate to absolute coordinates
+          .attr("y", d => (d.y * 10) + facetMinY - 25 - (d.height * 10) * 0.7) // Scale back up and adjust positioning, translate to absolute coordinates
+          .attr("width", d => d.width * 10) // Scale back up to match actual label size
+          .attr("height", d => d.height * 10) // Scale back up to match actual label size
+          .attr("fill", "none")
+          .attr("stroke", "blue")
+          .attr("stroke-width", 1)
+          .attr("stroke-dasharray", "3,3")
+          .attr("opacity", 0.8);
+      }
       
 
     }); // End facet group processing
