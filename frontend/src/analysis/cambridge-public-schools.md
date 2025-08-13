@@ -24,6 +24,8 @@ const showLabels = Inputs.toggle({label: "Label points with school names", value
 const showLabelsValue = Generators.input(showLabels);
 ```
 
+Each point in the plots below represents a public school in Cambridge. You can hover over the points for more information including school name. Check to box below if you want to label the points.
+
 ${showLabels}
 
 ## Test Score Progress
@@ -163,7 +165,6 @@ async function createSchoolSubjectPlot() {
       Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       The dashed line marks typical growth (50). Red trend lines show the correlation between demographics and growth.
-      ${showLabelsValue ? "School names are automatically positioned to avoid overlaps using simulated annealing optimization." : "Hover over points to see school names."}
     </p>
     ${finalPlot}
   </div>`;
@@ -303,7 +304,6 @@ async function createSchoolLevelsPlot() {
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       Red trend lines show the correlation between demographics and achievement levels.
-      ${showLabelsValue ? "School names are automatically positioned to avoid overlaps using simulated annealing optimization." : "Hover over points to see school names."}
     </p>
     ${finalPlot}
   </div>`;
