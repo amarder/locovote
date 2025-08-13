@@ -24,7 +24,7 @@ const showLabels = Inputs.toggle({label: "Label points with school names", value
 const showLabelsValue = Generators.input(showLabels);
 ```
 
-Each point in the plots below represents a public school in Cambridge. You can hover over the points for more information including school name. Check to box below if you want to label the points.
+Each point in the plots below represents a public school in Cambridge. You can hover over the points for more information including school name. Check the box below if you want to label the points.
 
 ${showLabels}
 
