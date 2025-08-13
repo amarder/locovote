@@ -1,14 +1,603 @@
-// D3-Labeler inline implementation
+// ggrepel-style force-based labeler implementation
+
+// Global seedable random number generator for consistent label placement
+var globalSeededRandom = {
+  seed: 12345,
+  state: 12345,
+  
+  // Simple LCG (Linear Congruential Generator) for deterministic randomness
+  random: function() {
+    this.state = (this.state * 1664525 + 1013904223) % 4294967296;
+    return this.state / 4294967296;
+  },
+  
+  // Reset random seed
+  reset: function(seed) {
+    this.seed = seed || 12345;
+    this.state = this.seed;
+  }
+};
+
 function createSchoolLabeler() {
   var lab = [],
       anc = [],
       w = 1, // box width
-      h = 1, // box width
+      h = 1, // box height
       labelerObj = {};
 
-  // Force simulation parameters (no longer needed - forces are now built-in)
+  // ggrepel-style physics simulation parameters (optimized for SHORT leader lines with acceptable overlaps)
+  var physics = {
+    force_push: 2e-6,     // Repulsion force magnitude (doubled based on low velocity)
+    force_pull: 1.5e-7,   // Spring force magnitude (increased significantly to pull labels closer)
+    max_time: 0.3,        // Maximum simulation time in seconds (more time for convergence)
+    max_iter: 4000,       // Maximum iterations (increased further)
+    velocity_decay: 0.75, // Velocity damping factor (reduced to maintain momentum)
+    temperature: 10.0,    // Simulated annealing temperature
+    cooling_rate: 0.99995, // Temperature cooling rate (slower cooling to maintain forces)
+    force_point_size: 250.0, // Multiplier for point repulsion forces (much stronger based on diagnostics)
+    min_improvement_threshold: 0.01, // Minimum improvement to continue
+    distance_pull_strength: 5.0, // Multiplier for distance-squared anchor pull force (much stronger!)
+    
+    // Use global seeded random for consistency
+    seededRandom: function() {
+      return globalSeededRandom.random();
+    },
+    
+    // Initialize physics state
+    velocities: [],
+    original_positions: [],
+    
+    // Euclidean distance between two points
+    euclid: function(a, b) {
+      var dx = a.x - b.x;
+      var dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    },
+    
+    // Check if two boxes overlap (with small buffer for clearance)
+    boxesOverlap: function(box1, box2) {
+      var buffer = 0.1; // Small buffer for label separation
+      return !(box1.x2 + buffer < box2.x1 || box2.x2 + buffer < box1.x1 || 
+               box1.y2 + buffer < box2.y1 || box2.y2 + buffer < box1.y1);
+    },
+    
+    // Check if a circle overlaps with a box (with buffer for clearance)
+    circleBoxOverlap: function(circle, box) {
+      // Find closest point on box to circle center
+      var closestX = Math.max(box.x1, Math.min(circle.x, box.x2));
+      var closestY = Math.max(box.y1, Math.min(circle.y, box.y2));
+      
+      // Calculate distance from circle center to closest point
+      var dx = circle.x - closestX;
+      var dy = circle.y - closestY;
+      var distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Add small buffer for clearance
+      return distance < (circle.r + 0.2);
+    },
+    
+    // Calculate repulsion force between two points
+    repelForce: function(a, b, force_magnitude) {
+      var dx = a.x - b.x;
+      var dy = a.y - b.y;
+      var d2 = Math.max(dx * dx + dy * dy, 0.0004); // Minimum distance constraint
+      var d = Math.sqrt(d2);
+      
+      // Unit vector in direction of force
+      var ux = dx / d;
+      var uy = dy / d;
+      
+      // Force magnitude inversely proportional to squared distance
+      var force = force_magnitude / d2;
+      
+      return {
+        x: ux * force,
+        y: uy * force
+      };
+    },
+    
+    // Calculate spring force pulling toward original position
+    springForce: function(current, original, force_magnitude) {
+      var dx = original.x - current.x;
+      var dy = original.y - current.y;
+      
+      return {
+        x: dx * force_magnitude,
+        y: dy * force_magnitude
+      };
+    },
+    
+    // Calculate distance-squared spring force (stronger pull for distant labels)
+    distanceSquaredSpringForce: function(current, target, force_magnitude) {
+      var dx = target.x - current.x;
+      var dy = target.y - current.y;
+      var distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < 0.1) return { x: 0, y: 0 }; // Avoid division by zero
+      
+      // Force increases with square of distance
+      var distance_squared_multiplier = distance * distance;
+      var unit_x = dx / distance;
+      var unit_y = dy / distance;
+      
+      return {
+        x: unit_x * force_magnitude * distance_squared_multiplier,
+        y: unit_y * force_magnitude * distance_squared_multiplier
+      };
+    },
+    
+    // Keep box within boundaries
+    putWithinBounds: function(box, bounds) {
+      var width = box.x2 - box.x1;
+      var height = box.y2 - box.y1;
+      
+      if (box.x1 < bounds.x1) {
+        box.x1 = bounds.x1;
+        box.x2 = box.x1 + width;
+      } else if (box.x2 > bounds.x2) {
+        box.x2 = bounds.x2;
+        box.x1 = box.x2 - width;
+      }
+      
+      if (box.y1 < bounds.y1) {
+        box.y1 = bounds.y1;
+        box.y2 = box.y1 + height;
+      } else if (box.y2 > bounds.y2) {
+        box.y2 = bounds.y2;
+        box.y1 = box.y2 - height;
+      }
+      
+      return box;
+    },
+    
+    // Get centroid of a box
+    centroid: function(box) {
+      return {
+        x: (box.x1 + box.x2) / 2,
+        y: (box.y1 + box.y2) / 2
+      };
+    },
+    
+    // Convert label to bounding box
+    labelToBox: function(label) {
+      return {
+        x1: label.x - label.width / 2,
+        y1: label.y - label.height + 0.2,
+        x2: label.x + label.width / 2,
+        y2: label.y + 0.2
+      };
+    },
+    
+    // Convert anchor to circle
+    anchorToCircle: function(anchor) {
+      return {
+        x: anchor.x,
+        y: anchor.y,
+        r: anchor.r
+      };
+    },
+    
+    // Main physics simulation step
+    simulationStep: function(iter) {
+      var n_overlaps = 0;
+      var bounds = { x1: 1, y1: 1, x2: w - 1, y2: h - 1 };
+      
+      // Process each label
+      for (var i = 0; i < lab.length; i++) {
+        var label = lab[i];
+        var labelBox = this.labelToBox(label);
+        var labelCenter = this.centroid(labelBox);
+        
+        var force = { x: 0, y: 0 };
+        var hasOverlap = false;
+        var overlap_count = 0; // Count overlaps for this specific label
+        
+        // Repulsion from other labels (with MASSIVE overlap penalties)
+        for (var j = 0; j < lab.length; j++) {
+          if (i === j) continue;
+          
+          var otherBox = this.labelToBox(lab[j]);
+          if (this.boxesOverlap(labelBox, otherBox)) {
+            n_overlaps++;
+            hasOverlap = true;
+            overlap_count++;
+            
+            var otherCenter = this.centroid(otherBox);
+            
+            // Calculate overlap area for proportional force
+            var overlap_x = Math.max(0, Math.min(labelBox.x2, otherBox.x2) - Math.max(labelBox.x1, otherBox.x1));
+            var overlap_y = Math.max(0, Math.min(labelBox.y2, otherBox.y2) - Math.max(labelBox.y1, otherBox.y1));
+            var overlap_area = overlap_x * overlap_y;
+            
+            // MODERATE force multiplier - prioritize shorter leader lines over perfect overlap avoidance
+            var base_multiplier = 10.0; // Base penalty for any overlap (reduced to allow some overlap for shorter lines)
+            var area_multiplier = overlap_area * 20.0; // Penalty proportional to overlap area (reduced significantly)
+            var count_multiplier = Math.pow(overlap_count, 2) * 2.0; // Exponential penalty for multiple overlaps (reduced)
+            var time_multiplier = 1.0 + Math.min(iter / 500, 3.0); // Increasing penalty over time (reduced and slower)
+            
+            var total_multiplier = base_multiplier + area_multiplier + count_multiplier;
+            total_multiplier *= time_multiplier;
+            
+            var adaptiveForce = this.force_push * total_multiplier;
+            var repel = this.repelForce(labelCenter, otherCenter, adaptiveForce);
+            force.x += repel.x;
+            force.y += repel.y;
+          }
+        }
+        
+        // Repulsion from OTHER anchor points (not the label's own point) - only when overlapping
+        for (var j = 0; j < anc.length; j++) {
+          if (j === i) continue; // Skip the label's own anchor point - it only attracts, never repels
+          
+          var anchorCircle = this.anchorToCircle(anc[j]);
+          if (this.circleBoxOverlap(anchorCircle, labelBox)) {
+            n_overlaps++;
+            hasOverlap = true;
+            overlap_count++;
+            
+            // Calculate penetration depth into circle
+            var dx = labelCenter.x - anchorCircle.x;
+            var dy = labelCenter.y - anchorCircle.y;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            var penetration = Math.max(0, anchorCircle.r + 0.2 - distance);
+            
+            // MODERATE penalty for overlapping with OTHER points
+            var base_point_multiplier = 40.0; // Moderate base penalty for other points
+            var penetration_multiplier = penetration * 100.0; // Moderate penalty for deep penetration
+            var point_time_multiplier = 1.0 + Math.min(iter / 200, 5.0); // Slower escalation for points
+            
+            var total_point_multiplier = (base_point_multiplier + penetration_multiplier) * point_time_multiplier;
+            
+            var adaptiveForce = this.force_push * total_point_multiplier;
+            var repel = this.repelForce(labelCenter, anchorCircle, adaptiveForce);
+            force.x += repel.x;
+            force.y += repel.y;
+          }
+        }
+        
+        // ALWAYS apply attractive force from the label's own anchor point (regardless of overlaps)
+        if (i < anc.length) {
+          var anchor_pos = { x: anc[i].x, y: anc[i].y };
+          var anchor_pull = this.distanceSquaredSpringForce(labelCenter, anchor_pos, this.force_pull * this.distance_pull_strength);
+          force.x += anchor_pull.x;
+          force.y += anchor_pull.y;
+        }
+        
+        // Update velocity with damping (reduced damping for overlapping labels)
+        var effective_decay = hasOverlap ? this.velocity_decay * 0.9 : this.velocity_decay; // Less damping for overlapping labels
+        this.velocities[i].x = this.velocities[i].x * effective_decay + force.x;
+        this.velocities[i].y = this.velocities[i].y * effective_decay + force.y;
+        
+        // Velocity boost for overlapping labels (they MUST move faster)
+        if (hasOverlap && overlap_count > 0) {
+          var velocity_boost = 1.0 + (overlap_count * 0.5); // 50% boost per overlap
+          this.velocities[i].x *= velocity_boost;
+          this.velocities[i].y *= velocity_boost;
+        }
+        
+        // CRITICAL: Velocity clamping to prevent numerical explosion
+        var max_velocity = 2.0; // Maximum allowed velocity per iteration
+        var velocity_magnitude = Math.sqrt(this.velocities[i].x * this.velocities[i].x + this.velocities[i].y * this.velocities[i].y);
+        if (velocity_magnitude > max_velocity) {
+          var scale = max_velocity / velocity_magnitude;
+          this.velocities[i].x *= scale;
+          this.velocities[i].y *= scale;
+        }
+        
+        // Add small random perturbation to break oscillations in late iterations
+        if (iter > 2000 && iter % 100 === 0) {
+          var perturbation = hasOverlap ? 0.1 : 0.05; // Larger perturbation for overlapping labels
+          this.velocities[i].x += (this.seededRandom() - 0.5) * perturbation;
+          this.velocities[i].y += (this.seededRandom() - 0.5) * perturbation;
+        }
+        
+        // Update position
+        label.x += this.velocities[i].x;
+        label.y += this.velocities[i].y;
+        
+        // Keep within bounds
+        var newBox = this.labelToBox(label);
+        newBox = this.putWithinBounds(newBox, bounds);
+        label.x = (newBox.x1 + newBox.x2) / 2;
+        label.y = newBox.y2 - 0.2;
+      }
+      
+      // Decay forces over time (slower decay to maintain effectiveness)
+      this.force_push *= 0.999995;
+      this.force_pull *= 0.99999;
+      this.temperature *= this.cooling_rate;
+      
+      return n_overlaps;
+    },
+    
+    // Initialize physics simulation
+    initializeSimulation: function() {
+      this.velocities = [];
+      this.original_positions = [];
+      
+      // Reset random seed for consistent results
+      globalSeededRandom.reset();
+      
+      for (var i = 0; i < lab.length; i++) {
+        this.velocities.push({ x: 0, y: 0 });
+        this.original_positions.push({ x: lab[i].x, y: lab[i].y });
+      }
+      
+      // Reset force parameters to initial values
+      this.force_push = 2e-6;
+      this.force_pull = 1.5e-7;
+      this.temperature = 10.0;
+    },
+    
+    // Run complete simulation with detailed diagnostics
+    runSimulation: function() {
+      console.log(`=== STARTING GGREPEL-STYLE PHYSICS SIMULATION ===`);
+      console.log(`Parameters: force_push=${this.force_push}, force_pull=${this.force_pull}, max_iter=${this.max_iter}`);
+      console.log(`Simulation area: ${w.toFixed(1)} x ${h.toFixed(1)}, Label density: ${(lab.length / (w * h)).toFixed(3)} labels/unit²`);
+      
+      this.initializeSimulation();
+      
+      var start_time = Date.now();
+      var max_time_ms = this.max_time * 1000;
+      var iter = 0;
+      var n_overlaps = 1;
+      var prev_overlaps = Infinity;
+      var stagnant_iterations = 0;
+      var max_stagnant = 400; // Increased based on diagnostics showing early termination
+      var best_overlaps = Infinity;
+      var total_velocity = 0;
+      var force_history = [];
+      var overlap_history = []; // Track overlap oscillations
+      
+      // Initial diagnostics
+      var initial_overlaps = this.simulationStep(0);
+      console.log(`Initial state: ${initial_overlaps} overlaps detected`);
+      
+      while (n_overlaps > 0 && iter < this.max_iter) {
+        iter++;
+        n_overlaps = this.simulationStep(iter);
+        
+        // Calculate total system velocity for convergence analysis
+        total_velocity = 0;
+        for (var i = 0; i < this.velocities.length; i++) {
+          total_velocity += Math.sqrt(this.velocities[i].x * this.velocities[i].x + this.velocities[i].y * this.velocities[i].y);
+        }
+        
+        // Track best result
+        if (n_overlaps < best_overlaps) {
+          best_overlaps = n_overlaps;
+        }
+        
+        // Track overlap history for oscillation detection
+        overlap_history.push(n_overlaps);
+        if (overlap_history.length > 50) overlap_history.shift(); // Keep last 50 values
+        
+        // Detect oscillation patterns
+        var is_oscillating = false;
+        if (overlap_history.length >= 20) {
+          var recent_range = Math.max(...overlap_history.slice(-20)) - Math.min(...overlap_history.slice(-20));
+          var recent_avg = overlap_history.slice(-20).reduce((a,b) => a+b) / 20;
+          is_oscillating = recent_range > 5 && Math.abs(n_overlaps - recent_avg) < recent_range * 0.3;
+        }
+        
+        // Enhanced stagnation detection
+        if ((n_overlaps >= prev_overlaps && total_velocity < 0.001) || is_oscillating) {
+          stagnant_iterations++;
+        } else {
+          stagnant_iterations = 0;
+        }
+        prev_overlaps = n_overlaps;
+        
+        // Store force history for analysis
+        if (iter % 100 === 0) {
+          force_history.push({
+            iter: iter,
+            overlaps: n_overlaps,
+            velocity: total_velocity,
+            force_push: this.force_push,
+            force_pull: this.force_pull
+          });
+        }
+        
+        // Enhanced progress logging with overlap penalties
+        if (iter % 200 === 0) {
+          // Calculate average force multiplier being applied
+          var total_force_multiplier = 0;
+          var overlapping_labels = 0;
+          for (var i = 0; i < lab.length; i++) {
+            var labelBox = this.labelToBox(lab[i]);
+            var label_overlaps = 0;
+            for (var j = 0; j < lab.length; j++) {
+              if (i !== j && this.boxesOverlap(labelBox, this.labelToBox(lab[j]))) label_overlaps++;
+            }
+            for (var j = 0; j < anc.length; j++) {
+              if (this.circleBoxOverlap(this.anchorToCircle(anc[j]), labelBox)) label_overlaps++;
+            }
+            if (label_overlaps > 0) {
+              overlapping_labels++;
+              var multiplier = 50.0 + Math.pow(label_overlaps, 2) * 10.0;
+              total_force_multiplier += multiplier;
+            }
+          }
+          var avg_multiplier = overlapping_labels > 0 ? (total_force_multiplier / overlapping_labels) : 1.0;
+          
+          console.log(`Iter ${iter}: ${n_overlaps} overlaps, velocity=${total_velocity.toFixed(4)}, forces=${this.force_push.toExponential(1)}/${this.force_pull.toExponential(1)}, avg_penalty=${avg_multiplier.toFixed(1)}x`);
+        }
+        
+        // Early termination with enhanced diagnostics
+        if (stagnant_iterations > max_stagnant) {
+          console.log(`Early termination: no progress for ${max_stagnant} iterations`);
+          console.log(`Stagnation analysis: velocity=${total_velocity.toFixed(4)}, best_overlaps=${best_overlaps}, oscillating=${is_oscillating}`);
+          if (overlap_history.length >= 10) {
+            var recent_overlaps = overlap_history.slice(-10).join(',');
+            console.log(`Recent overlap pattern: [${recent_overlaps}]`);
+          }
+          break;
+        }
+        
+        // Check time limit
+        if (iter % 10 === 0) {
+          var elapsed = Date.now() - start_time;
+          if (elapsed > max_time_ms) {
+            console.log(`Time limit reached after ${iter} iterations`);
+            break;
+          }
+        }
+      }
+      
+      var elapsed = Date.now() - start_time;
+      console.log(`Simulation complete: ${iter} iterations, ${elapsed}ms, ${n_overlaps} remaining overlaps`);
+      console.log(`Performance: ${(iter/elapsed*1000).toFixed(0)} iter/sec, best result: ${best_overlaps} overlaps`);
+      
+      // Final diagnostics
+      this.printDetailedDiagnostics();
+      
+      return n_overlaps === 0;
+    },
+    
+    // Detailed diagnostics for optimization
+    printDetailedDiagnostics: function() {
+      console.log(`=== DETAILED DIAGNOSTICS ===`);
+      
+      // Analyze label distribution
+      var label_positions = [];
+      var anchor_positions = [];
+      var distances = [];
+      
+      for (var i = 0; i < lab.length; i++) {
+        label_positions.push({x: lab[i].x, y: lab[i].y, width: lab[i].width, height: lab[i].height});
+        if (i < anc.length) {
+          anchor_positions.push({x: anc[i].x, y: anc[i].y, r: anc[i].r});
+          var dx = lab[i].x - anc[i].x;
+          var dy = lab[i].y - anc[i].y;
+          distances.push(Math.sqrt(dx * dx + dy * dy));
+        }
+      }
+      
+      // Distance statistics
+      var avg_distance = distances.reduce((a, b) => a + b, 0) / distances.length;
+      var min_distance = Math.min(...distances);
+      var max_distance = Math.max(...distances);
+      console.log(`Leader distances: avg=${avg_distance.toFixed(2)}, min=${min_distance.toFixed(2)}, max=${max_distance.toFixed(2)}`);
+      
+      // Overlap analysis with area calculations
+      var label_overlap_count = 0;
+      var point_overlap_count = 0;
+      var boundary_violations = 0;
+      var overlap_details = [];
+      var total_label_overlap_area = 0;
+      var total_point_overlap_area = 0;
+      var total_boundary_violation_area = 0;
+      
+      for (var i = 0; i < lab.length; i++) {
+        var labelBox = this.labelToBox(lab[i]);
+        var labelArea = (labelBox.x2 - labelBox.x1) * (labelBox.y2 - labelBox.y1);
+        
+        // Check boundary violations with area calculation
+        var violation_area = 0;
+        if (labelBox.x1 < 1 || labelBox.x2 > w - 1 || labelBox.y1 < 1 || labelBox.y2 > h - 1) {
+          boundary_violations++;
+          // Calculate how much of the label is outside bounds
+          var bounds_x1 = Math.max(labelBox.x1, 1);
+          var bounds_y1 = Math.max(labelBox.y1, 1);
+          var bounds_x2 = Math.min(labelBox.x2, w - 1);
+          var bounds_y2 = Math.min(labelBox.y2, h - 1);
+          var inside_area = Math.max(0, (bounds_x2 - bounds_x1) * (bounds_y2 - bounds_y1));
+          violation_area = labelArea - inside_area;
+          total_boundary_violation_area += violation_area;
+        }
+        
+        // Check label-label overlaps with area calculation
+        for (var j = i + 1; j < lab.length; j++) {
+          var otherBox = this.labelToBox(lab[j]);
+          if (this.boxesOverlap(labelBox, otherBox)) {
+            label_overlap_count++;
+            
+            // Calculate actual overlap area
+            var overlap_x = Math.max(0, Math.min(labelBox.x2, otherBox.x2) - Math.max(labelBox.x1, otherBox.x1));
+            var overlap_y = Math.max(0, Math.min(labelBox.y2, otherBox.y2) - Math.max(labelBox.y1, otherBox.y1));
+            var overlap_area = overlap_x * overlap_y;
+            total_label_overlap_area += overlap_area;
+            
+            var overlap_percent = ((overlap_area / Math.min(labelArea, (otherBox.x2 - otherBox.x1) * (otherBox.y2 - otherBox.y1))) * 100).toFixed(1);
+            overlap_details.push(`Labels ${i}-${j}: "${lab[i].name}" vs "${lab[j].name}" (${overlap_area.toFixed(2)} area, ${overlap_percent}% of smaller label)`);
+          }
+        }
+        
+        // Check point overlaps with area calculation
+        for (var j = 0; j < anc.length; j++) {
+          var anchorCircle = this.anchorToCircle(anc[j]);
+          if (this.circleBoxOverlap(anchorCircle, labelBox)) {
+            point_overlap_count++;
+            
+            // Calculate approximate overlap area between circle and rectangle
+            var circle_area = Math.PI * anchorCircle.r * anchorCircle.r;
+            
+            // Simple approximation: find intersection of circle bounding box with label box
+            var circle_box = {
+              x1: anchorCircle.x - anchorCircle.r,
+              y1: anchorCircle.y - anchorCircle.r,
+              x2: anchorCircle.x + anchorCircle.r,
+              y2: anchorCircle.y + anchorCircle.r
+            };
+            
+            var overlap_x = Math.max(0, Math.min(labelBox.x2, circle_box.x2) - Math.max(labelBox.x1, circle_box.x1));
+            var overlap_y = Math.max(0, Math.min(labelBox.y2, circle_box.y2) - Math.max(labelBox.y1, circle_box.y1));
+            var approx_overlap_area = overlap_x * overlap_y;
+            
+            // Scale by circle fill ratio (rough approximation)
+            var actual_overlap_area = approx_overlap_area * 0.785; // π/4 ≈ 0.785 for circle vs square
+            total_point_overlap_area += actual_overlap_area;
+          }
+        }
+      }
+      
+      // Calculate percentages of total label area that's obscured
+      var label_areas = lab.map(l => l.width * l.height);
+      var total_label_area = label_areas.reduce((a, b) => a + b, 0);
+      var plot_area = w * h;
+      var area_ratio = total_label_area / plot_area;
+      
+      var label_overlap_percentage = total_label_area > 0 ? (total_label_overlap_area / total_label_area * 100) : 0;
+      var point_overlap_percentage = total_label_area > 0 ? (total_point_overlap_area / total_label_area * 100) : 0;
+      var boundary_violation_percentage = total_label_area > 0 ? (total_boundary_violation_area / total_label_area * 100) : 0;
+      var total_obscured_percentage = label_overlap_percentage + point_overlap_percentage + boundary_violation_percentage;
+      
+      console.log(`=== OVERLAP AREA ANALYSIS ===`);
+      console.log(`Label-label overlaps: ${total_label_overlap_area.toFixed(2)} area (${label_overlap_percentage.toFixed(1)}% of total label area) [${label_overlap_count} instances]`);
+      console.log(`Label-point overlaps: ${total_point_overlap_area.toFixed(2)} area (${point_overlap_percentage.toFixed(1)}% of total label area) [${point_overlap_count} instances]`);
+      console.log(`Boundary violations: ${total_boundary_violation_area.toFixed(2)} area (${boundary_violation_percentage.toFixed(1)}% of total label area) [${boundary_violations} instances]`);
+      console.log(`TOTAL OBSCURED: ${total_obscured_percentage.toFixed(1)}% of label text is unreadable`);
+      console.log(`Area analysis: total_label_area=${total_label_area.toFixed(1)}, plot_area=${plot_area.toFixed(1)}, density=${area_ratio.toFixed(3)}`);
+      
+      // Show specific overlapping pairs with area details (limit to first 3 for space)
+      if (overlap_details.length > 0) {
+        console.log(`Worst overlaps (first 3):`);
+        for (var i = 0; i < Math.min(3, overlap_details.length); i++) {
+          console.log(`  ${overlap_details[i]}`);
+        }
+      }
+      
+      if (area_ratio > 0.3) {
+        console.log(`WARNING: High label density (${(area_ratio*100).toFixed(1)}%) may prevent convergence`);
+      }
+      
+      // Suggest optimizations
+      if (point_overlap_count > label_overlap_count) {
+        console.log(`SUGGESTION: Increase force_point_size (currently ${this.force_point_size}) to better repel from data points`);
+      }
+      if (boundary_violations > 0) {
+        console.log(`SUGGESTION: Labels hitting boundaries - consider increasing plot margins or reducing label sizes`);
+      }
+      if (label_overlap_count > 0 && avg_distance < 2.0) {
+        console.log(`SUGGESTION: Increase force_push to create more separation between labels`);
+      }
+      
+      console.log(`=== END DIAGNOSTICS ===`);
+    }
+  };
 
-  // Advanced exploration optimizer with multiple strategies
+  // Legacy exploration optimizer (keeping for fallback/comparison)
   var explorationOptimizer = {
     temperature: 10.0, // Simulated annealing temperature
     coolingRate: 0.95,
@@ -684,65 +1273,66 @@ function createSchoolLabeler() {
   // Utility functions removed - no longer needed for force-directed approach
 
   labelerObj.start = function(iterations) {
-    // Advanced multi-start optimization with exploration strategies
+    // ggrepel-style physics-based label optimization
     var m = lab.length;
     if (m === 0) return;
 
-    console.log(`=== STARTING ADVANCED LABEL OPTIMIZATION: ${m} labels ===`);
+    console.log(`=== STARTING GGREPEL-STYLE LABEL OPTIMIZATION: ${m} labels ===`);
     console.log(`Boundary constraints: width=${w.toFixed(2)}, height=${h.toFixed(2)}`);
 
-    // Run multi-start optimization
-    var finalScore = multiStartOptimization();
+    // Add small random jitter to initial positions to break symmetries (using seeded random)
+    for (var i = 0; i < m; i++) {
+      var jitter = 0.1;
+      lab[i].x += (globalSeededRandom.random() - 0.5) * jitter;
+      lab[i].y += (globalSeededRandom.random() - 0.5) * jitter;
+    }
+
+    // Run ggrepel-style physics simulation
+    var success = physics.runSimulation();
     
     // Calculate final statistics
-    var totalOverlaps = 0;
     var totalLineLength = 0;
     var labelOverlaps = 0;
     var pointOverlaps = 0;
+    var totalOverlapArea = 0;
     
     for (var i = 0; i < m; i++) {
-      var overlapPenalty = explorationOptimizer.calculateOverlapPenalty(i);
-      totalOverlaps += overlapPenalty;
-      
       var dx = lab[i].x - anc[i].x;
       var dy = lab[i].y - anc[i].y;
       totalLineLength += Math.sqrt(dx * dx + dy * dy);
       
-      // Count label-label overlaps
+      // Calculate label-label overlap areas using physics collision detection
+      var labelBox = physics.labelToBox(lab[i]);
       for (var j = i + 1; j < m; j++) {
-        var x1 = lab[i].x - lab[i].width / 2;
-        var y1 = lab[i].y - lab[i].height + 0.2;
-        var x2 = lab[i].x + lab[i].width / 2;
-        var y2 = lab[i].y + 0.2;
-        
-        var ox1 = lab[j].x - lab[j].width / 2;
-        var oy1 = lab[j].y - lab[j].height + 0.2;
-        var ox2 = lab[j].x + lab[j].width / 2;
-        var oy2 = lab[j].y + 0.2;
-        
-        var overlap_x = Math.max(0, Math.min(x2, ox2) - Math.max(x1, ox1));
-        var overlap_y = Math.max(0, Math.min(y2, oy2) - Math.max(y1, oy1));
-        
-        if (overlap_x > 0 && overlap_y > 0) {
+        var otherBox = physics.labelToBox(lab[j]);
+        if (physics.boxesOverlap(labelBox, otherBox)) {
           labelOverlaps++;
+          // Calculate overlap area for main results
+          var overlap_x = Math.max(0, Math.min(labelBox.x2, otherBox.x2) - Math.max(labelBox.x1, otherBox.x1));
+          var overlap_y = Math.max(0, Math.min(labelBox.y2, otherBox.y2) - Math.max(labelBox.y1, otherBox.y1));
+          totalOverlapArea += overlap_x * overlap_y;
         }
       }
       
-      // Count point overlaps
+      // Calculate point overlap areas using physics collision detection
       for (var j = 0; j < anc.length; j++) {
-        var dx = lab[i].x - anc[j].x;
-        var dy = lab[i].y - anc[j].y;
-        var dist = Math.sqrt(dx * dx + dy * dy);
-        var minDist = anc[j].r + 1.2;
-        
-        if (dist < minDist) {
+        var anchorCircle = physics.anchorToCircle(anc[j]);
+        if (physics.circleBoxOverlap(anchorCircle, labelBox)) {
           pointOverlaps++;
         }
       }
     }
     
-    console.log(`Results: Avg leader length: ${(totalLineLength / m).toFixed(1)}px, Label overlaps: ${labelOverlaps}, Point overlaps: ${pointOverlaps}`);
-    console.log(`=== END DEBUG ===`);
+    // Calculate total label area for percentage
+    var totalLabelArea = 0;
+    for (var i = 0; i < m; i++) {
+      totalLabelArea += lab[i].width * lab[i].height;
+    }
+    var overlapPercentage = totalLabelArea > 0 ? (totalOverlapArea / totalLabelArea * 100) : 0;
+    
+    console.log(`Results: Avg leader length: ${(totalLineLength / m).toFixed(1)}px, Label overlaps: ${labelOverlaps} (${totalOverlapArea.toFixed(2)} area, ${overlapPercentage.toFixed(1)}% obscured), Point overlaps: ${pointOverlaps}`);
+    console.log(`Simulation ${success ? 'CONVERGED' : 'INCOMPLETE'}`);
+    console.log(`=== END GGREPEL OPTIMIZATION ===`);
     
     return labelerObj;
   };
@@ -942,11 +1532,11 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         tempText.text(schoolName);
         const bbox = tempText.node().getBBox();
         
-        // Start labels in any direction around their points
+        // Start labels in any direction around their points (using seeded random for consistency)
         const minDistance = 25; // Minimum distance from point
         const extraDistance = 15; // Additional random distance
-        const angle = Math.random() * 2 * Math.PI; // Full 360° around the point
-        const distance = minDistance + Math.random() * extraDistance;
+        const angle = globalSeededRandom.random() * 2 * Math.PI; // Full 360° around the point
+        const distance = minDistance + globalSeededRandom.random() * extraDistance;
         
         // SCALE DOWN label dimensions dramatically for D3-Labeler
         const scaledWidth = (bbox.width * 0.85) / 10; // Scale down by 10x
@@ -986,13 +1576,13 @@ export function addSchoolLabels(plotElement, data, xField, yField, textField, d3
         }
       };
 
-      // Apply D3-Labeler optimization for this facet with enhanced settings
+      // Apply ggrepel-style physics optimization for this facet
       const labeler = createSchoolLabeler()
         .label(labels)
         .anchor(anchors) 
         .width(facetWidth)
         .height(facetHeight)
-                  .start(100); // Force-directed simulation iterations
+        .start(100); // Physics simulation iterations (parameter not used in new implementation)
       
       // Post-process labels to optimize distances
       labels.forEach((label, i) => {
