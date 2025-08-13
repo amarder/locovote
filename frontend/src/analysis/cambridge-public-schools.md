@@ -19,6 +19,15 @@ Eugenia saw Locovote and thought there might be an opportunity to collaborate.
 
 For Cambridge, I think it makes sense to compare schools using test score progress and race-balanced progress measures. I include test score levels since this is how schools are often compared. If you're curious to learn more about the pros and cons of the various measures see the [school metrics page](/school-metrics).
 
+```js
+const showLabels = Inputs.toggle({label: "Label points with school names", value: false});
+const showLabelsValue = Generators.input(showLabels);
+```
+
+Each point in the plots below represents a public school in Cambridge. You can hover over the points for more information including school name. Check the box below if you want to label the points.
+
+${showLabels}
+
 ## Test Score Progress
 
 ```js
@@ -76,6 +85,9 @@ async function createSchoolSubjectPlot() {
   const xPadding = (xMax - xMin) * 0.1;
   const yPadding = (yMax - yMin) * 0.1;
 
+  // Debug: Check a few data points
+  console.log("Sample enrichedData points:", enrichedData.slice(0, 3));
+  
   // Create the faceted plot
   const subjectPlot = Plot.plot({
     width: 700,
@@ -103,11 +115,15 @@ async function createSchoolSubjectPlot() {
       range: ["#059669", "#2563eb", "#7c3aed", "#dc2626"],
       legend: true
     },
+    r: {
+      type: "identity", // Use raw values directly without sqrt scaling
+      range: [3, 12] // Minimum and maximum radius in pixels
+    },
     marks: [
-      // Reference line at 50 (typical growth)
+      // Reference line at 50 (typical growth) - bottom layer
       Plot.ruleY([50], {stroke: "#666", strokeDasharray: "2,2", opacity: 0.5}),
       
-      // Add trend line for each subject - no confidence band
+      // Add trend line for each subject - middle layer
       Plot.linearRegressionY(enrichedData, {
         x: "share_white", 
         y: "progress",
@@ -118,34 +134,30 @@ async function createSchoolSubjectPlot() {
         ci: 0  // Remove confidence interval/uncertainty band
       }),
 
-      // Points for each school-subject with hover functionality
-        Plot.dot(enrichedData, {
-          x: "share_white",
-          y: "progress",
-          fx: "subject_display",
-          r: d => 200 + d.n, // Fixed larger size instead of variable sizing
-          fill: "school_level",
-          fillOpacity: 0.8,
-          stroke: "school_level",
-          strokeWidth: 2,
-          title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nProgress: ${d.progress.toFixed(1)}\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
-        }),
-
-      // School name labels on hover - using text marks for better visibility
-      Plot.text(enrichedData, {
+      // Points for each school-subject with hover functionality - top layer
+      Plot.dot(enrichedData, {
         x: "share_white",
-        y: "progress", 
+        y: "progress",
         fx: "subject_display",
-        text: "school",
-        fontSize: 9,
-        fill: "#333",
-        textAnchor: "middle",
-        dy: -8,
-        opacity: 0,
-        pointerEvents: "none"
+        r: d => 4 + d.n / 500,
+        fill: "school_level",
+        fillOpacity: 1.0, // Full opacity for clear visibility
+        stroke: "black", // Small black stroke on the outside
+        strokeWidth: 1,
+        title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nProgress: ${d.progress.toFixed(1)}\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
       }),
+
+
     ]
   });
+
+  // Conditionally apply auto-labeling based on toggle
+  const finalPlot = showLabelsValue ? 
+    addSchoolLabels(subjectPlot, enrichedData, "share_white", "progress", "school", d3, {
+      algorithm: 'physics',
+      iterations: 1000
+    }) : 
+    subjectPlot;
 
   return html`<div class="card">
     <h3>Test Score Progress vs School Demographics by Subject</h3>
@@ -153,9 +165,8 @@ async function createSchoolSubjectPlot() {
       Each point shows the average student growth percentile for a school in a subject (aggregated across all years)—that is, how much student scores are increasing over time compared to the rest of the state.
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       The dashed line marks typical growth (50). Red trend lines show the correlation between demographics and growth.
-      Hover over points to see detailed information about each school.
     </p>
-    ${subjectPlot}
+    ${finalPlot}
   </div>`;
 }
 
@@ -246,8 +257,12 @@ async function createSchoolLevelsPlot() {
       range: ["#059669", "#2563eb", "#7c3aed", "#dc2626"],
       legend: true
     },
+    r: {
+      type: "identity", // Use raw values directly without sqrt scaling
+      range: [3, 12] // Minimum and maximum radius in pixels
+    },
     marks: [
-      // Add trend line for each subject - no confidence band
+      // Add trend line for each subject - middle layer
       Plot.linearRegressionY(enrichedLevelsData, {
         x: "share_white", 
         y: "pct_meeting_exceeding",
@@ -258,34 +273,30 @@ async function createSchoolLevelsPlot() {
         ci: 0  // Remove confidence interval/uncertainty band
       }),
 
-      // Points for each school-subject with hover functionality
+      // Points for each school-subject with hover functionality - top layer
       Plot.dot(enrichedLevelsData, {
         x: "share_white",
         y: "pct_meeting_exceeding",
         fx: "subject_display",
-        r: d => 200 + d.n, // Same sizing as progress plot
+        r: d => 4 + d.n / 500,
         fill: "school_level",
-        fillOpacity: 0.8,
-        stroke: "school_level",
-        strokeWidth: 2,
+        fillOpacity: 1.0, // Full opacity for clear visibility
+        stroke: "black", // Small black stroke on the outside
+        strokeWidth: 1,
         title: d => `${d.school}\nSubject: ${d.subject_display}\nLevel: ${d.school_level}\nMeeting/Exceeding: ${d.pct_meeting_exceeding.toFixed(1)}%\nShare White: ${d.share_white.toFixed(1)}%\nTests: ${d.n.toLocaleString()}`
       }),
 
-      // School name labels on hover - using text marks for better visibility
-      Plot.text(enrichedLevelsData, {
-        x: "share_white",
-        y: "pct_meeting_exceeding", 
-        fx: "subject_display",
-        text: "school",
-        fontSize: 9,
-        fill: "#333",
-        textAnchor: "middle",
-        dy: -8,
-        opacity: 0,
-        pointerEvents: "none"
-      }),
+
     ]
   });
+
+  // Conditionally apply auto-labeling based on toggle
+  const finalPlot = showLabelsValue ? 
+    addSchoolLabels(levelsPlot, enrichedLevelsData, "share_white", "pct_meeting_exceeding", "school", d3, {
+      algorithm: 'physics',
+      iterations: 1000
+    }) : 
+    levelsPlot;
 
   return html`<div class="card">
     <h3>Test Score Levels vs School Demographics by Subject</h3>
@@ -293,9 +304,8 @@ async function createSchoolLevelsPlot() {
       Each point represents a school's percentage of students meeting or exceeding expectations in a subject (aggregated across all years). 
       Points are colored by grade level (Elementary, Middle, High, etc.) and sized by number of tests.
       Red trend lines show the correlation between demographics and achievement levels.
-      Hover over points to see detailed information about each school.
     </p>
-    ${levelsPlot}
+    ${finalPlot}
   </div>`;
 }
 
@@ -303,7 +313,13 @@ display(await createSchoolLevelsPlot());
 ```
 
 ```js
+import {addSchoolLabels} from "../components/labeler.js";
 const db = FileAttachment("/data/cambridge.db").sqlite();
+```
+
+
+
+```js
 const schoolTypes = {
   "Amigos School": "Elementary and Middle",
   "Cambridge Rindge and Latin": "High",
